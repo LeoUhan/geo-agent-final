@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEO 智能体 · 可见性监测</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --teal-900:#013a3e; --teal-800:#01545a; --teal:#01696F; --teal-600:#0b8189; --teal-100:#dcecec; --teal-050:#eef5f5;
+  --cream:#F7F6F2; --white:#ffffff;
+  --gold:#D19900; --gold-100:#faf0d6;
+  --ink:#141a1a; --ink-70:#4b5757; --ink-50:#778484; --ink-30:#a9b3b3;
+  --line:#e2e5e0; --line-2:#eef0ec;
+  --ok:#1f7a4d; --ok-bg:#e6f4ec;
+  --warn:#a76a00; --warn-bg:#fdf2dd;
+  --risk:#a8321f; --risk-bg:#fbe9e5;
+  --steel:#3f5d7a; --steel-bg:#e9eff5;
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --sh-1:0 1px 2px rgba(20,26,26,.06);
+  --sh-2:0 4px 14px rgba(20,26,26,.09);
+  --f-ui:'Manrope','Noto Sans SC',system-ui,-apple-system,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--f-ui);background:var(--cream);color:var(--ink);font-size:13.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input{font-family:inherit}
+.app{display:flex;min-height:100vh}
+
+/* ---- 侧边栏 ---- */
+.sidebar{width:236px;flex-shrink:0;background:var(--teal-900);color:#e7f0ef;display:flex;flex-direction:column}
+.sb-brand{display:flex;align-items:center;gap:9px;padding:16px 16px;border-bottom:1px solid rgba(255,255,255,.09)}
+.sb-brand .logo{color:var(--gold);font-weight:800;font-size:15px}
+.sb-brand .name{font-weight:700;font-size:13px}
+.sb-brand .sub{font-size:10px;color:#7e9c9a;margin-top:1px}
+.nav{padding:10px 10px;flex:1}
+.nav .grp-title{font-size:10px;color:#7e9c9a;letter-spacing:.04em;padding:10px 8px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;color:#c7dcda;font-size:12.5px;font-weight:500;cursor:default;margin-bottom:1px}
+.nav-item.active{background:rgba(255,255,255,.13);color:#fff}
+.nav-item .ico{width:15px;text-align:center;opacity:.85}
+.nav-sub{margin-left:24px;margin-top:2px;margin-bottom:6px}
+.nav-sub .s-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:7px;font-size:12px;color:#9fbdba;cursor:pointer}
+.nav-sub .s-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-sub .s-item.on{background:rgba(255,255,255,.1);color:#fff;font-weight:600}
+.sb-foot{padding:12px 16px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:#7e9c9a}
+
+/* ---- 主区 ---- */
+.main{flex:1;min-width:0;overflow-y:auto}
+.topbar{height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 26px;background:var(--white);position:sticky;top:0;z-index:5}
+.crumb{font-size:11px;color:var(--ink-50);letter-spacing:.02em}
+.content{max-width:980px;margin:0 auto;padding:26px 30px 90px}
+
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:6px;flex-wrap:wrap}
+.pagehead h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.01em}
+.pagehead .desc{font-size:12px;color:var(--ink-70);margin-top:5px;max-width:640px}
+
+.seg{display:inline-flex;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:3px}
+.seg button{border:none;background:none;padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-50);cursor:pointer}
+.seg button.on{background:var(--teal);color:#fff}
+
+.card{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--sh-1)}
+.sec{margin-top:22px}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.sec-head h2{font-size:13.5px;margin:0;font-weight:700}
+.sec-head .sub{font-size:11.5px;color:var(--ink-50)}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+.badge.teal{background:var(--teal-050);color:var(--teal)}
+.badge.gold{background:var(--gold-100);color:var(--warn)}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.risk{background:var(--risk-bg);color:var(--risk)}
+.badge.grey{background:var(--line-2);color:var(--ink-50)}
+
+.btn{font-family:inherit;font-size:12px;font-weight:700;border-radius:8px;padding:7px 13px;border:1px solid var(--line);background:var(--white);color:var(--ink);cursor:pointer;transition:.12s}
+.btn:hover{border-color:var(--ink-30)}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.primary:hover{background:var(--teal-800)}
+.btn.sm{padding:5px 10px;font-size:11.5px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn[disabled]:hover{border-color:var(--line)}
+.inp{font-family:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--teal-600);border-radius:7px;outline:none;width:100%}
+.inp:focus{box-shadow:0 0 0 3px var(--teal-050)}
+
+.tiny{font-size:11px}
+.muted{color:var(--ink-50)}
+.linkbtn{color:var(--teal);font-weight:700;cursor:pointer;background:none;border:none;font-family:inherit;font-size:inherit;padding:0}
+
+table.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+table.tbl th{text-align:left;font-weight:700;color:var(--ink-50);font-size:11px;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.tbl td{padding:9px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl tr.changed td{background:var(--gold-100)}
+table.tbl tr.filtered-out{display:none}
+
+.seg-sm{display:inline-flex;background:var(--line-2);border-radius:8px;padding:2px}
+.seg-sm button{border:none;background:none;font-family:inherit;font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:6px;cursor:pointer;color:var(--ink-50)}
+.seg-sm button.on{background:var(--white);color:var(--ink);box-shadow:var(--sh-1)}
+
+.checkbox{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--ink-30);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:#fff;flex-shrink:0;background:#fff}
+.checkbox.on{background:var(--teal);border-color:var(--teal)}
+.checkbox.disabled{opacity:.4;cursor:not-allowed}
+
+/* credibility banner */
+.credbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--teal-100);border-radius:var(--r-lg);margin-bottom:24px;background:var(--teal-050)}
+.credbar .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.credbar b{font-size:12.5px}
+.credbar .meta{color:var(--ink-70);font-size:12px}
+.credbar .sep{width:1px;align-self:stretch;background:var(--teal-100)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{padding:12px 13px;border-radius:var(--r);border:1px solid var(--line)}
+.kpi .lb{font-size:11.5px;color:var(--ink-50);font-weight:600}
+.kpi .val{font-size:23px;font-weight:800;margin-top:4px;font-family:var(--f-mono)}
+.kpi .delta{font-size:12px;font-weight:700;margin-left:6px}
+.kpi .delta.up{color:var(--ok)}
+.kpi .delta.down{color:var(--risk)}
+.kpi .abs{font-size:11px;color:var(--ink-50);margin-top:3px}
+.kpi .def{font-size:10.5px;color:var(--ink-50);margin-top:7px;line-height:1.5}
+
+.aux-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.aux-card{padding:10px 12px;border:1px dashed var(--line);border-radius:var(--r)}
+.aux-card .lb{font-size:11px;color:var(--ink-50);font-weight:600}
+.aux-card .val{font-size:14px;font-weight:700;margin-top:3px}
+.senti-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:6px}
+
+.chart-wrap{margin-top:16px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px}
+.legend span{display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--ink-70)}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.legend .off{opacity:.3}
+
+.heat-table{width:100%;border-collapse:collapse;font-size:11.5px}
+.heat-table th{font-weight:700;color:var(--ink-50);text-align:center;padding:0 4px 8px;font-size:11px}
+.heat-table th:first-child{text-align:left}
+.heat-table td{text-align:center;padding:3px}
+.heat-table td:first-child{text-align:left;font-weight:600;padding:6px 8px 6px 0;white-space:nowrap;font-size:12px}
+.heat-cell{width:100%;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-size:11px;font-weight:700;cursor:pointer;transition:transform .1s}
+.heat-cell:hover{transform:scale(1.06)}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;background:var(--gold-100);color:var(--warn);padding:5px 10px;border-radius:20px;font-size:11.5px;font-weight:700;margin-bottom:10px}
+.filter-chip button{background:none;border:none;color:var(--warn);cursor:pointer;font-weight:800;font-family:inherit}
+
+.hit{display:inline-flex;width:19px;height:19px;border-radius:5px;align-items:center;justify-content:center;font-size:9px;font-weight:800;margin-right:3px}
+.hit.rec{background:var(--ok-bg);color:var(--ok)}
+.hit.men{background:var(--gold-100);color:var(--warn)}
+.hit.no{background:var(--line-2);color:var(--ink-30)}
+
+.wizard{max-width:600px;margin:0 auto}
+.steps-bar{display:flex;align-items:center;margin-bottom:26px}
+.steps-bar .s{display:flex;align-items:center;flex:1}
+.steps-bar .s .circ{width:24px;height:24px;border-radius:50%;background:var(--line-2);color:var(--ink-50);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.steps-bar .s.done .circ{background:var(--teal);color:#fff}
+.steps-bar .s.now .circ{background:var(--ink);color:#fff}
+.steps-bar .s .lb{font-size:11.5px;margin-left:8px;color:var(--ink-50);white-space:nowrap}
+.steps-bar .s.now .lb,.steps-bar .s.done .lb{color:var(--ink);font-weight:700}
+.steps-bar .rule{flex:1;height:1px;background:var(--line);margin:0 10px}
+.steps-bar .rule.done{background:var(--teal)}
+.wizcard h3{margin:0 0 4px;font-size:15.5px;font-weight:800}
+.wizcard .desc{color:var(--ink-50);font-size:12px;margin-bottom:16px}
+.field-row{display:flex;justify-content:space-between;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line-2);gap:14px}
+.field-row:last-child{border-bottom:none}
+.field-row .k{font-size:12px;font-weight:700;min-width:110px;flex-shrink:0}
+.field-row .v{font-size:12.5px;color:var(--ink-70);flex:1}
+.field-row .src{margin-top:4px}
+.persona-card{border:1px solid var(--line);border-radius:var(--r);padding:12px 13px;position:relative}
+.persona-card.pending{border-color:var(--gold);background:var(--gold-100)}
+.persona-card h4{margin:0 0 3px;font-size:12.5px;font-weight:700}
+.persona-card .role{font-size:11px;color:var(--ink-50);margin-bottom:8px}
+.wiz-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px}
+.wiz-warn{font-size:11.5px;color:var(--warn);font-weight:600}
+.progress-wrap{text-align:center;padding:60px 20px}
+.spin{width:30px;height:30px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--teal);margin:0 auto 18px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.pending-strip{display:flex;align-items:center;gap:12px;padding:11px 15px;margin-bottom:18px;border:1px solid var(--gold);background:var(--gold-100);border-radius:var(--r-lg)}
+.pending-strip b{font-weight:800}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:12.5px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
+.toast.show{opacity:1}
+.drawer-mask{position:fixed;inset:0;background:rgba(10,10,8,.32);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.drawer-mask.show{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:-440px;width:420px;max-width:90vw;height:100%;background:var(--white);box-shadow:-12px 0 40px rgba(0,0,0,.1);transition:right .25s cubic-bezier(.2,.8,.3,1);z-index:41;overflow-y:auto;padding:24px}
+.drawer.show{right:0}
+.drawer h3{margin:0 0 4px;font-size:15px;font-weight:800}
+.drawer .close{position:absolute;top:20px;right:20px;cursor:pointer;color:var(--ink-50);font-size:16px;background:none;border:none}
+.answer-block{background:var(--cream);border-radius:var(--r);padding:12px 13px;margin-top:10px;font-size:12px;line-height:1.7;border:1px solid var(--line-2)}
+.answer-block mark{background:var(--gold-100);padding:0 2px;border-radius:2px}
+.demo-toggle{padding:10px 14px;border:1px dashed var(--ink-30);border-radius:var(--r);margin-bottom:20px;font-size:11px;color:var(--ink-50);background:var(--white)}
+
+/* ---- 工作项确认卡（周期性产出，需要终审） ---- */
+.workhead{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.workhead h2{font-size:13.5px;margin:0;font-weight:800}
+.workhead .cnt{font-size:11.5px;color:var(--warn);font-weight:700}
+.workhead .done{font-size:11.5px;color:var(--ok);font-weight:700}
+.workcard{border:1px solid var(--gold);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px;background:var(--white)}
+.workcard.resolved{border-color:var(--line);opacity:.7}
+.workcard-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.workcard-tags{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.wtitle{font-size:13px;font-weight:700;margin-top:4px}
+.wowner{font-size:11px;color:var(--ink-50);margin-top:3px;display:flex;align-items:center;gap:6px}
+.wowner .av{width:16px;height:16px;border-radius:50%;background:var(--teal);color:#fff;font-size:9px;display:inline-flex;align-items:center;justify-content:center;font-weight:800}
+.wowner .reviewed{background:var(--teal-050);color:var(--teal-800);font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px}
+.wblock{background:var(--cream);border-radius:var(--r);padding:11px 13px;font-size:12.5px;line-height:1.65;margin-top:12px}
+.wblock .wlb{font-size:10.5px;font-weight:800;color:var(--teal);margin-bottom:5px}
+.wneed{font-size:11.5px;color:var(--ink-70);margin-top:10px}
+.wact{margin-top:8px;display:flex;gap:8px;align-items:center}
+.fb-box{margin-top:10px}
+.fb-box textarea{width:100%;font-family:inherit;font-size:12.5px;border:1px solid var(--teal-600);border-radius:8px;padding:8px 10px;resize:vertical;min-height:56px}
+
+/* ---- 主题 chips ---- */
+.topic-chip{display:inline-flex;align-items:center;gap:6px;background:var(--teal-050);color:var(--teal-800);border:1px solid var(--teal-100);border-radius:20px;padding:4px 10px 4px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.topic-chip.pending{background:var(--gold-100);color:var(--warn);border-color:var(--gold)}
+.topic-chip .x{opacity:.7;font-size:10px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-brand"><span class="logo">◈</span><div><div class="name">独立站超级智能体</div><div class="sub">统一后台框架</div></div></div>
+    <nav class="nav">
+      <div class="grp-title">GEO 智能体</div>
+      <div class="nav-item active"><span class="ico">✳</span>GEO 智能体</div>
+      <div class="nav-sub">
+        <div class="s-item">概览</div>
+        <div class="s-item on">可见性监测</div>
+        <div class="s-item">诊断与策略</div>
+        <div class="s-item">优化中心</div>
+        <div class="s-item">报告与设置</div>
+      </div>
+    </nav>
+    <div class="sb-foot">框架级 DEMO · 交互原型 v3</div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><span class="crumb">GEO 智能体 / 可见性监测</span></div>
+    <div class="content" id="main"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="drawer-mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
+
+<script>
+/* ============ 状态（真实可变） ============ */
+const KPIS = [
+  {id:'mention', zh:'被提及率', v:42, base:28, prev:38, moe:2.8, hex:'#01696F', def:'买家问AI时，回答里提到我们的比例'},
+  {id:'rec', zh:'被推荐率', v:28, base:15, prev:24, moe:2.8, hex:'#a76a00', def:'提到我们时，是否作为推荐/比较对象'},
+  {id:'cite', zh:'被引用率', v:17, base:9, prev:15, moe:2.8, hex:'#3f5d7a', def:'AI把官网当信息来源（给链接或具名）的比例'},
+  {id:'sov', zh:'声量份额', v:27, base:17, prev:23, moe:2.8, hex:'#a8321f', def:'同一批问题中，我方占所有品牌被提及的比例'}
+];
+const TREND = {
+  weeks:['W-6','W-5','W-4','W-3','W-2','W-1','本周'],
+  mention:[36,36,37,39,37,39,42], rec:[24,25,25,26,25,26,28], cite:[13,14,14,15,14,15,17], sov:[22,22,23,24,22,24,27]
+};
+const AUX = { pos:{v:'2.3', prev:'3.1'}, senti:{pos:71,neu:24,neg:5,fir:7} };
+
+let personas = [
+  {id:'p1', name:'复材加工厂技术负责人', mkt:'DE', st:'ok'},
+  {id:'p2', name:'航空零部件采购经理', mkt:'US', st:'ok'},
+  {id:'p3', name:'精密加工车间主管', mkt:'US', st:'ok'},
+  {id:'p4', name:'日本商社设备采购担当', mkt:'JP', st:'ok'},
+  {id:'p6', name:'汽车 Tier-1 工艺工程师', mkt:'DE', st:'pending'}
+];
+let topics = [
+  {id:'t1', name:'碳纤维/复材切割', st:'ok', origIndex:0},
+  {id:'t2', name:'五轴水刀选型', st:'ok', origIndex:1},
+  {id:'t3', name:'水刀vs激光', st:'ok', origIndex:2},
+  {id:'t4', name:'钛合金航空加工', st:'ok', origIndex:3},
+  {id:'t5', name:'中国供应商评估', st:'ok', origIndex:4},
+  {id:'t6', name:'陶瓷基复合材料切割', st:'pending', origIndex:null}
+];
+const HEAT = { p1:[78,72,65,40,55], p2:[52,60,48,74,58], p3:[38,55,62,30,41], p4:[12,8,15,5,6], p6:[30,44,38,26,35] };
+
+/* ---- 监测阶段工作项：周期性产出，需终审 ---- */
+let SVC_MODE = 'self'; // self 自助 | managed 代运营（仅用于本原型演示"已复核"标记差异）
+let workItems = [
+  {id:'w1', kind:'人设与提问集', title:'新识别买家角色「汽车 Tier-1 工艺工程师」，已配套生成 6 条监测提问',
+    due:'今天',
+    body:'从近期访客行为与官网询盘线索中，识别出一个此前未覆盖的买家角色。已按其关注重点生成6条德语监测提问，其中4条通过证据校验直接入库，2条证据不足需你确认后再入库。',
+    need:'确认新增人设与提问（可勾掉不需要的提问），或提出修改意见', status:'pending', feedback:null},
+  {id:'w2', kind:'月度审计', title:'9 月可见度审计已完成，四项主指标全部上升',
+    due:'2天内',
+    body:'本月声量份额27%，较基线提升10个百分点，主要来自三方AI引擎的引用改善。同时发现一处内容缺口：碳纤维方案页被Perplexity引为来源，但回答中未提及品牌名。',
+    need:'确认本月结论并进入下一轮监测重点，或提出修改意见', status:'pending', feedback:null}
+];
+
+let prompts = [
+  {q:'Welches 5-Achs-Wasserstrahlsystem eignet sich für CFRP ohne Delamination?', pid:'p1', mkt:'DE', hits:['rec','men','no'], pos:'1/3', tr:'up', changed:true},
+  {q:'Which waterjet suppliers meet AS9100 for titanium aerospace parts?', pid:'p2', mkt:'US', hits:['rec','rec','men'], pos:'2/5', tr:'flat', changed:true},
+  {q:'Affordable 5-axis waterjet for a small job shop — total cost of ownership?', pid:'p3', mkt:'US', hits:['men','no','no'], pos:'3/5', tr:'flat', changed:false},
+  {q:'炭素繊維の加工に適したウォータージェット装置の海外メーカーは？', pid:'p4', mkt:'JP', hits:['no','no','no'], pos:'未命中', tr:'new', changed:true},
+  {q:'Waterjet vs laser for carbon fiber — which should a startup buy first?', pid:'p3', mkt:'US', hits:['men','rec','no'], pos:'仅提及', tr:'flat', changed:false},
+  {q:'Is APW reliable compared with Flow and OMAX on service and uptime?', pid:'p6', mkt:'DE', hits:['men','no','no'], pos:'仅提及', tr:'new', changed:true}
+];
+const SOURCES = [
+  {dom:'compositesworld.com', cover:'复材加工·工艺对比', cited:'五引擎高频', us:'无提及', risk:true},
+  {dom:'reddit.com/r/Machinists', cover:'设备选型讨论', cited:'ChatGPT中频', us:'1条旧帖', risk:false},
+  {dom:'thefabricator.com', cover:'金属加工', cited:'AI Overviews中频', us:'无提及', risk:true},
+  {dom:'youtube.com', cover:'试切演示视频', cited:'Gemini高频', us:'有频道·未结构化', risk:false}
+];
+let inputs = [
+  {k:'品牌与别名', v:'APW · APW Waterjet · 安培威', src:'知识库继承', st:'ok', sensitive:true},
+  {k:'产品线', v:'五轴水刀切割系统 · 三轴水刀 · 高压泵与耗材', src:'官网扫描', st:'ok', sensitive:false},
+  {k:'目标市场×语言', v:'DE·US·JP ｜ DE·EN·JA', src:'知识库继承', st:'ok', sensitive:false},
+  {k:'竞争对手', v:'Flow Intl · OMAX · Bystronic', src:'知识库继承', st:'ok', sensitive:true},
+  {k:'可对外事实', v:'46条 · 精度±0.05mm · CE/AS9100供应链', src:'知识库继承', st:'ok', sensitive:false},
+  {k:'AI新识别竞对', v:'Techni Waterjet · KMT（未在名单内但被高频并列）', src:'AI识别', st:'pending', sensitive:true}
+];
+let promptLib = [
+  {q:'Welches 5-Achs-Wasserstrahlsystem eignet sich für CFRP ohne Delamination?', pid:'p1', ev:3, st:'ok'},
+  {q:'Which waterjet suppliers meet AS9100 for titanium aerospace parts?', pid:'p2', ev:3, st:'ok'},
+  {q:'炭素繊維の加工に適したウォータージェット装置の海外メーカーは？', pid:'p4', ev:1, st:'pending'},
+  {q:'Is APW a reliable waterjet brand compared with Flow and OMAX?', pid:'p6', ev:2, st:'pending'}
+];
+
+let VIEW='result';
+let CFG_MODE='first';
+let WIZ_STEP=1;
+let WIZ_SAMPLING=false;
+let CFG_TAB='inputs';
+let SHOW_ALL_PROMPTS=false;
+let HEAT_METRIC='topic';
+let HEAT_FILTER=null;
+let EDIT_KEY=null;
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),2400)}
+function openDrawer(html){document.getElementById('drawer').innerHTML=html;document.getElementById('mask').classList.add('show');document.getElementById('drawer').classList.add('show')}
+function closeDrawer(){document.getElementById('mask').classList.remove('show');document.getElementById('drawer').classList.remove('show')}
+function pt(a,b){const x=a-b;return (x>=0?'+':'')+x+'pt'}
+function esc(s){return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+
+function pageHead(){
+  return `<div class="pagehead">
+    <div><h1>可见性监测</h1><div class="desc">从品牌/人设/提问到采样结果，本模块只呈现"观测到了什么"，诊断与建议在下一模块。</div></div>
+    <div class="seg">
+      <button class="${VIEW==='result'?'on':''}" onclick="setView('result')">监测结果</button>
+      <button class="${VIEW==='config'?'on':''}" onclick="setView('config')">监测配置</button>
+    </div>
+  </div>`;
+}
+
+/* ============ 结果视图 ============ */
+function credBar(){
+  return `<div class="credbar">
+    <span class="dot"></span>
+    <b>全景审计 · 09-01</b>
+    <span class="meta">样本量 n=1,200 · 误差带 ±2.8pp</span>
+    <span class="sep"></span>
+    <span class="badge teal">决策级数据</span>
+    <span class="meta">下次全景审计 10-01，期间更新为哨兵快照，仅供方向参考</span>
+  </div>`;
+}
+
+function lineChart(){
+  const w=740,ht=176,padL=8,padR=8,padT=14,padB=22;
+  const weeks=TREND.weeks;
+  const maxV=50;
+  const x=i=>padL+i*((w-padL-padR)/(weeks.length-1));
+  const y=v=>ht-padB-(v/maxV)*(ht-padT-padB);
+  let svg=`<svg viewBox="0 0 ${w} ${ht}" style="width:100%;height:${ht}px;overflow:visible">`;
+  for(let g=0;g<=3;g++){const gy=padT+g*((ht-padT-padB)/3);svg+=`<line x1="${padL}" y1="${gy}" x2="${w-padR}" y2="${gy}" stroke="#eef0ec" stroke-width="1"/>`;}
+  KPIS.forEach(k=>{
+    const el=document.getElementById('leg-'+k.id);
+    if(el && el.dataset.off==='1') return;
+    const data=TREND[k.id];
+    const pts=data.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+    svg+=`<polyline points="${pts}" fill="none" stroke="${k.hex}" stroke-width="${k.id==='mention'?2.6:1.7}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    data.forEach((v,i)=>svg+=`<circle cx="${x(i)}" cy="${y(v)}" r="2.6" fill="${k.hex}"/>`);
+  });
+  weeks.forEach((wl,i)=>svg+=`<text x="${x(i)}" y="${ht-4}" font-size="10" fill="#778484" text-anchor="middle" font-family="Manrope">${wl}</text>`);
+  svg+='</svg>';
+  return svg;
+}
+
+function kpiBlock(){
+  const chips = KPIS.map(k=>`<div class="kpi" style="border-color:${k.hex}55">
+    <div class="lb">${k.zh}</div>
+    <div class="val" style="color:${k.hex}">${k.v}<span style="font-size:14px">%</span><span class="delta ${k.v>=k.prev?'up':'down'}">${pt(k.v,k.prev)}</span></div>
+    <div class="abs">较基线 ${k.base}%（${pt(k.v,k.base)}）· ±${k.moe}pp</div>
+    <div class="def">${k.def}</div>
+  </div>`).join('');
+  const legend = KPIS.map(k=>`<span id="leg-${k.id}" data-off="0" onclick="toggleLeg('${k.id}')"><i style="background:${k.hex}"></i>${k.zh}</span>`).join('');
+  return `<div class="kpi-row">${chips}</div>
+  <div class="chart-wrap">
+    <div class="legend">${legend}</div>
+    <div id="chartHolder">${lineChart()}</div>
+  </div>
+  <div class="aux-row">
+    <div class="aux-card"><div class="lb">辅助 · 平均位次（只做趋势解释）</div><div class="val">${AUX.pos.v} <span class="tiny muted" style="font-weight:400">从 ${AUX.pos.prev}</span></div></div>
+    <div class="aux-card"><div class="lb">辅助 · 情感与事实错误率</div>
+      <div class="val" style="font-size:12px;font-weight:600">正面 ${AUX.senti.pos}% · 中性 ${AUX.senti.neu}% · 负面 ${AUX.senti.neg}%
+        <span style="color:var(--risk);margin-left:6px">事实错误率 ${AUX.senti.fir}%</span></div>
+      <div class="senti-bar"><span style="width:${AUX.senti.pos}%;background:var(--ok)"></span><span style="width:${AUX.senti.neu}%;background:var(--line-2)"></span><span style="width:${AUX.senti.neg}%;background:var(--risk)"></span></div>
+    </div>
+  </div>`;
+}
+function toggleLeg(id){const el=document.getElementById('leg-'+id);const off=el.dataset.off==='1';el.dataset.off=off?'0':'1';el.classList.toggle('off',!off);document.getElementById('chartHolder').innerHTML=lineChart();}
+
+function heatColor(v){const a=0.10+(v/100)*0.85;return `rgba(1,105,111,${a})`;}
+function heatmap(){
+  const confirmedTopics = topics.filter(t=>t.st==='ok');
+  const cols = HEAT_METRIC==='topic'? confirmedTopics.map(t=>t.name) : ['DE','US','JP'];
+  const rows = personas.map(p=>{
+    let arr;
+    if(HEAT_METRIC==='topic'){
+      arr = confirmedTopics.map(t=> t.origIndex==null ? null : (HEAT[p.id]||[])[t.origIndex]);
+    } else {
+      arr = [ (HEAT[p.id]||[0,0,0,0,0])[0], (HEAT[p.id]||[0,0,0,0,0])[1], p.mkt==='JP'?9:null ];
+    }
+    return `<tr><td>${p.name}</td>${arr.map((v,i)=> v==null? `<td><div class="heat-cell" style="background:var(--line-2);color:var(--ink-30)" title="尚无监测数据，下次全景审计生效">—</div></td>` : `<td><div class="heat-cell" style="background:${heatColor(v)};color:${v>50?'#fff':'#141a1a'}" onclick="drillHeat('${p.id}','${esc(cols[i])}')" title="点击筛选下方提问结果">${v}</div></td>`).join('')}</tr>`;
+  }).join('');
+  return `<div class="seg-sm" style="margin-bottom:14px">
+    <button class="${HEAT_METRIC==='topic'?'on':''}" onclick="setHeatMetric('topic')">按主题</button>
+    <button class="${HEAT_METRIC==='market'?'on':''}" onclick="setHeatMetric('market')">按市场</button>
+  </div>
+  <table class="heat-table"><thead><tr><th>人设 / ${HEAT_METRIC==='topic'?'主题':'市场'}</th>${cols.map(c=>`<th>${c.length>8?c.slice(0,8)+'…':c}</th>`).join('')}</tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="tiny muted" style="margin-top:10px">颜色深浅代表被提及率，点击格子按人设筛选下方"提问级结果"；未确认的主题不出现在此处（下方"输入底座"可确认）</div>`;
+}
+function setHeatMetric(m){HEAT_METRIC=m;HEAT_FILTER=null;render();}
+function drillHeat(pid,col){HEAT_FILTER={pid,col};SHOW_ALL_PROMPTS=true;render();
+  const el=document.getElementById('sec-prompts'); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});}
+function clearHeatFilter(){HEAT_FILTER=null;render();}
+
+function hitIcon(h){const map={rec:['✓','rec'],men:['·','men'],no:['—','no']};const [t,c]=map[h];return `<span class="hit ${c}">${t}</span>`;}
+function promptsTable(){
+  let list = prompts;
+  if(HEAT_FILTER){ list = list.filter(p=>p.pid===HEAT_FILTER.pid); }
+  const changed = list.filter(p=>p.changed);
+  const rest = list.filter(p=>!p.changed);
+  const shown = SHOW_ALL_PROMPTS? list : changed;
+  const rows = shown.map(p=>`<tr class="${p.changed?'changed':''}" style="cursor:pointer" onclick='openPromptDetail("${esc(p.q)}")'>
+    <td style="max-width:320px"><span style="font-weight:600">${p.q}</span>
+      <div class="tiny muted" style="margin-top:3px">${(personas.find(x=>x.id===p.pid)||{}).name||''} · ${p.mkt}</div></td>
+    <td style="white-space:nowrap">${p.hits.map(hitIcon).join('')}</td>
+    <td class="mono">${p.pos}</td>
+    <td>${p.tr==='up'?'<span style="color:var(--ok);font-weight:800">↑</span>':p.tr==='new'?'<span class="badge gold">新</span>':'<span class="muted">→</span>'}</td>
+  </tr>`).join('') || `<tr><td colspan="4" class="tiny muted" style="text-align:center;padding:24px 0">没有匹配的提问</td></tr>`;
+  return (HEAT_FILTER?`<div class="filter-chip">按人设筛选：${(personas.find(p=>p.id===HEAT_FILTER.pid)||{}).name} × ${HEAT_FILTER.col}<button onclick="clearHeatFilter()">✕</button></div>`:'')
+  + `<table class="tbl"><thead><tr><th style="min-width:280px">提问</th><th>引擎命中</th><th>位次</th><th>趋势</th></tr></thead><tbody>${rows}</tbody></table>
+  ${!SHOW_ALL_PROMPTS && rest.length ? `<div style="margin-top:12px"><button class="btn sm" onclick="showAllPrompts()">显示全部 ${list.length} 条（含 ${rest.length} 条本期无变化）</button></div>`:''}
+  <div class="tiny muted" style="margin-top:12px"><span class="hit rec">✓</span>推荐&nbsp;&nbsp;<span class="hit men">·</span>仅提及&nbsp;&nbsp;<span class="hit no">—</span>未命中</div>`;
+}
+function showAllPrompts(){SHOW_ALL_PROMPTS=true;render();}
+function openPromptDetail(q){
+  const p = prompts.find(x=>x.q===q); if(!p) return;
+  openDrawer(`<button class="close" onclick="closeDrawer()">✕</button>
+  <h3>提问详情</h3>
+  <div class="tiny muted" style="margin-bottom:16px">${(personas.find(x=>x.id===p.pid)||{}).name} · ${p.mkt}</div>
+  <div class="card" style="padding:14px 16px;box-shadow:none"><span style="font-weight:700;font-size:13px">${p.q}</span></div>
+  <div class="sec-head" style="margin-top:20px"><h2>五引擎回答摘录</h2></div>
+  <div class="answer-block"><b>ChatGPT</b> · 位次 1/3<br>Für CFRP ohne Delamination empfiehlt sich 5-Achs-Wasserstrahlschneiden… <mark>APW</mark> bietet ein 5-Achs-System mit dynamischer Kopfkompensation…</div>
+  <div class="answer-block"><b>Perplexity</b> · 仅提及<br>该问题下同时提到 Flow、OMAX 与 <mark>APW</mark>，但未附官网链接来源。</div>
+  <div class="answer-block" style="opacity:.55"><b>Gemini</b> · 未命中<br>回答中未出现相关品牌名。</div>
+  <div class="tiny muted" style="margin-top:16px">这些发现会在诊断与策略中给出具体处理建议</div>`);
+}
+
+function sourceTable(){
+  return `<table class="tbl"><thead><tr><th>来源域名</th><th>覆盖主题</th><th>被引频次</th><th>我方提及</th></tr></thead><tbody>
+  ${SOURCES.map(s=>`<tr><td><span style="font-weight:700">${s.dom}</span></td><td class="tiny">${s.cover}</td><td class="tiny">${s.cited}</td>
+    <td>${s.risk?`<span class="badge risk">${s.us}</span>`:`<span class="badge grey">${s.us}</span>`}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="tiny muted" style="margin-top:12px">这里只呈现"AI在引用谁"，为什么我方缺席、该怎么做在<button class="linkbtn" onclick="toast('（演示）跳转至诊断与策略')">诊断与策略</button>中给出</div>`;
+}
+
+function workItemsBlock(){
+  const pending = workItems.filter(w=>w.status==='pending');
+  const resolved = workItems.filter(w=>w.status!=='pending');
+  const card = w => `<div class="workcard ${w.status!=='pending'?'resolved':''}">
+    <div class="workcard-top">
+      <div>
+        <div class="workcard-tags"><span class="badge teal">监测/跟踪</span><span class="badge grey">${w.kind}</span></div>
+        <div class="wtitle">${w.title}</div>
+        <div class="wowner"><span class="av">G</span>GEO 智能体${SVC_MODE==='managed'?' <span class="reviewed">已复核</span>':''}</div>
+      </div>
+      <span class="badge gold">${w.status==='pending'?'待你确认 · '+w.due : '已处理'}</span>
+    </div>
+    <div class="wblock"><div class="wlb">结论与依据</div>${w.body}</div>
+    ${w.status==='pending'? `<div class="wneed"><b>需要你：</b>${w.need}</div>
+    <div class="wact"><button class="btn sm primary" onclick="confirmWorkItem('${w.id}')">✓ 确认</button><button class="btn sm" onclick="toggleFeedbackBox('${w.id}')">提修改意见</button><button class="btn sm" onclick="openWorkDetail('${w.id}')">查看详情 →</button></div>
+    <div class="fb-box" id="fb-${w.id}" style="display:none"><textarea id="fbtext-${w.id}" placeholder="写下你的修改意见，GEO智能体将据此调整"></textarea><div style="margin-top:6px"><button class="btn sm primary" onclick="submitFeedback('${w.id}')">提交意见</button> <button class="btn sm" onclick="toggleFeedbackBox('${w.id}')">取消</button></div></div>`
+    : `<div class="tiny muted" style="margin-top:10px">${w.feedback? '你的意见：'+w.feedback : '已确认'}</div>`}
+  </div>`;
+  return `<div class="sec">
+  <div class="demo-toggle">演示切换（实际由客户是否购买代运营服务决定，非用户可切换项）：
+    <button class="btn sm ${SVC_MODE==='self'?'primary':''}" onclick="setSvcMode('self')" style="margin-left:6px">自助模式</button>
+    <button class="btn sm ${SVC_MODE==='managed'?'primary':''}" onclick="setSvcMode('managed')">代运营模式</button>
+    <span style="margin-left:8px">两种模式工作流程与呈现完全一致，区别只在代运营模式下每项结论多一个"已复核"标记</span>
+  </div>
+  <div class="workhead"><h2>本期工作与待确认</h2>${pending.length?`<span class="cnt">待你确认 · ${pending.length}件</span>`:`<span class="done">已全部处理</span>`}</div>
+  ${pending.map(card).join('')}
+  ${resolved.length && pending.length===0 ? resolved.map(card).join('') : ''}
+  </div>`;
+}
+function setSvcMode(m){SVC_MODE=m;render();}
+function confirmWorkItem(id){ const w=workItems.find(x=>x.id===id); w.status='confirmed'; render(); toast('已确认「'+w.kind+'」'); }
+function toggleFeedbackBox(id){ const el=document.getElementById('fb-'+id); if(el) el.style.display = el.style.display==='none'?'block':'none'; }
+function submitFeedback(id){
+  const w=workItems.find(x=>x.id===id); const val=document.getElementById('fbtext-'+id).value.trim();
+  if(!val){ toast('请先写点意见'); return; }
+  w.feedback=val; w.status='confirmed'; render(); toast('意见已记录，GEO智能体将据此调整');
+}
+function openWorkDetail(id){
+  const w=workItems.find(x=>x.id===id);
+  openDrawer(`<button class="close" onclick="closeDrawer()">✕</button>
+  <h3>${w.kind}</h3><div class="tiny muted" style="margin-bottom:14px">${w.title}</div>
+  <div class="wblock"><div class="wlb">结论与依据</div>${w.body}</div>
+  <div class="tiny muted" style="margin-top:14px">${w.need}</div>
+  <div style="margin-top:16px"><button class="btn sm primary" onclick="confirmWorkItem('${w.id}');closeDrawer()">✓ 确认</button></div>`);
+}
+
+function resultView(){
+  return credBar()
+  + workItemsBlock()
+  + `<div class="sec"><div class="sec-head"><h2>GEO效果 · IAB 四主指标</h2><span class="sub">先看变化量，再看绝对值</span></div><div class="card">${kpiBlock()}</div></div>`
+  + `<div class="sec"><div class="sec-head"><h2>人设 × ${HEAT_METRIC==='topic'?'主题':'市场'} 热力图</h2><span class="sub">定位最薄弱的组合</span></div><div class="card">${heatmap()}</div></div>`
+  + `<div class="sec" id="sec-prompts"><div class="sec-head"><h2>提问级结果</h2><span class="sub">默认只显示本期有变化的提问</span></div><div class="card">${promptsTable()}</div></div>`
+  + `<div class="sec"><div class="sec-head"><h2>来源图谱</h2><span class="sub">谁在影响行业AI回答</span></div><div class="card">${sourceTable()}</div></div>`;
+}
+
+/* ============ 配置视图 ============ */
+function configView(){
+  return `<div class="demo-toggle">演示切换（实际由是否已有监测数据自动判定）：
+    <button class="btn sm ${CFG_MODE==='first'?'primary':''}" onclick="setCfgMode('first')" style="margin-left:6px">新工作区 · 首次引导</button>
+    <button class="btn sm ${CFG_MODE==='edit'?'primary':''}" onclick="setCfgMode('edit')">已配置 · 自由编辑</button></div>`
+  + (CFG_MODE==='first'? wizardView() : editView());
+}
+function setCfgMode(m){CFG_MODE=m;WIZ_STEP=1;WIZ_SAMPLING=false;render();}
+
+const WIZ_TITLES=['输入底座','买家人设','提问库','监测计划'];
+function wizValid(step){
+  if(step===1) return inputs.slice(0,3).every(x=>x.v && x.v.trim());
+  if(step===2) return personas.some(p=>p.st==='ok');
+  if(step===3) return promptLib.some(p=>p.st==='ok');
+  return true;
+}
+function wizardView(){
+  if(WIZ_SAMPLING){
+    return `<div class="wizard"><div class="card progress-wrap"><div class="spin"></div>
+      <div style="font-size:15px;font-weight:800">首次采样进行中</div>
+      <div class="tiny muted" style="margin-top:8px">预计 20–40 分钟，关闭页面不影响进度，完成后在概览查看提醒</div>
+      <button class="btn sm" style="margin-top:20px" onclick="finishSampling()">（演示）立即查看结果</button>
+    </div></div>`;
+  }
+  const stepsBar = `<div class="steps-bar">${WIZ_TITLES.map((t,i)=>{
+    const n=i+1, st = n<WIZ_STEP?'done':n===WIZ_STEP?'now':'';
+    return `<div class="s ${st}"><div class="circ">${n<WIZ_STEP?'✓':n}</div><div class="lb">${t}</div></div>${i<3?`<div class="rule ${n<WIZ_STEP?'done':''}"></div>`:''}`;
+  }).join('')}</div>`;
+
+  let body='';
+  if(WIZ_STEP===1){
+    body = `<h3>确认输入底座</h3><div class="desc">已从企业知识库继承、官网扫描预填，请确认或编辑</div>
+    ${inputs.slice(0,5).map(x=>fieldRow(x,'wiz')).join('')}
+    ${topicsBlock()}
+    <div class="tiny muted" style="margin-top:16px">品牌、产品线、目标市场为必填；竞对、事实、主题可留空或待确认，之后在监测配置中补充</div>`;
+  } else if(WIZ_STEP===2){
+    body = `<h3>确认买家人设</h3><div class="desc">AI基于输入底座生成的人设，至少确认1个才能继续</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${personas.map(personaCard).join('')}</div>
+    <div style="margin-top:14px"><button class="btn sm" onclick="addPersona()">＋ 新增人设</button></div>`;
+  } else if(WIZ_STEP===3){
+    body = `<h3>确认提问库</h3><div class="desc">按人设与主题生成，证据不足2项的默认不勾选</div>
+    <table class="tbl"><thead><tr><th style="width:24px"></th><th>提问</th><th>证据</th><th>状态</th></tr></thead><tbody>
+    ${promptLib.map((p,i)=>`<tr><td><span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePromptLib(${i})">${p.st==='ok'?'✓':''}</span></td><td style="font-weight:600">${p.q}</td>
+      <td class="mono">${p.ev}/4</td><td>${p.st==='ok'?'<span class="badge ok">已入库</span>':'<span class="badge gold">待确认</span>'}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:14px"><button class="btn sm" onclick="addPrompt()">＋ 手动新增</button></div>`;
+  } else if(WIZ_STEP===4){
+    const cnt = promptLib.filter(p=>p.st==='ok').length;
+    body = `<h3>确认监测计划</h3><div class="desc">本次将执行的监测范围，由套餐档位决定上限</div>
+    <div class="field-row"><div class="k">监测提问</div><div class="v">${cnt} 条（当前已确认数）</div></div>
+    <div class="field-row"><div class="k">AI引擎</div><div class="v">Google 系 3 引擎（入门版）</div></div>
+    <div class="field-row"><div class="k">监测频率</div><div class="v">每周，哨兵快照每日</div></div>
+    <div class="field-row"><div class="k">首次全景审计</div><div class="v">确认后立即启动</div></div>`;
+  }
+
+  const valid = wizValid(WIZ_STEP);
+  const warnMap={1:'品牌/产品线/目标市场不能为空',2:'至少确认1个人设才能继续',3:'至少确认1条提问才能继续'};
+  return `<div class="wizard">${stepsBar}<div class="card wizcard">${body}
+    <div class="wiz-foot">
+      <button class="btn" ${WIZ_STEP===1?'disabled':''} onclick="wizBack()">上一步</button>
+      ${!valid?`<span class="wiz-warn">${warnMap[WIZ_STEP]}</span>`:''}
+      <button class="btn primary" ${!valid?'disabled':''} onclick="wizNext()">${WIZ_STEP<4?'下一步':'确认并启动首次监测'}</button>
+    </div></div></div>`;
+}
+function fieldRow(x,ctx){
+  const editing = EDIT_KEY===ctx+':'+x.k;
+  return `<div class="field-row"><div class="k">${x.k}</div>
+    <div class="v">${editing?`<input class="inp" id="ef-${esc(x.k)}" value="${x.v.replace(/"/g,'&quot;')}"><div style="margin-top:6px"><button class="btn sm primary" onclick="saveField('${esc(x.k)}','${ctx}')">保存</button> <button class="btn sm" onclick="cancelEdit()">取消</button></div>`:x.v}
+      ${!editing?`<div class="src"><span class="badge grey">${x.src}</span>${x.st==='pending'?' <span class=\"badge gold\">待确认</span>':''}</div>`:''}
+    </div>
+    ${!editing?`<div style="white-space:nowrap">${x.st==='pending'?`<button class="btn sm primary" onclick="confirmInput('${esc(x.k)}')">确认</button> `:''}<button class="btn sm" onclick="startEdit('${esc(x.k)}','${ctx}')">编辑</button></div>`:''}
+  </div>`;
+}
+function startEdit(k,ctx){EDIT_KEY=ctx+':'+k;render();setTimeout(()=>{const el=document.getElementById('ef-'+k);if(el){el.focus();el.select();}},0);}
+function cancelEdit(){EDIT_KEY=null;render();}
+function saveField(k,ctx){
+  const el=document.getElementById('ef-'+k); const val=el.value;
+  const item = inputs.find(x=>x.k===k);
+  const doSave=()=>{ item.v=val; item.st='ok'; EDIT_KEY=null; render(); toast('已保存「'+k+'」'); };
+  if(item.sensitive){
+    if(confirm('修改「'+k+'」会导致下游相关提问与历史基线重新计算，历史数据将不可直接比较。确认保存吗？')) doSave();
+  } else { doSave(); }
+}
+function confirmInput(k){
+  const item = inputs.find(x=>x.k===k); item.st='ok'; render();
+  toast('已采纳「'+k+'」，下次全景审计重算基线并标注');
+}
+function personaCard(p){
+  return `<div class="persona-card ${p.st==='pending'?'pending':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <h4>${p.name}</h4>
+      <span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePersona('${p.id}')">${p.st==='ok'?'✓':''}</span>
+    </div>
+    <div class="role">${p.mkt} 市场${p.st==='pending'?' · AI生成，待确认':''}</div>
+    <button class="btn sm" onclick="editPersona('${p.id}')">编辑</button>
+  </div>`;
+}
+function togglePersona(id){const p=personas.find(x=>x.id===id); p.st = p.st==='ok'?'pending':'ok'; render();}
+function editPersona(id){
+  const p=personas.find(x=>x.id===id);
+  const val = prompt('编辑人设名称', p.name);
+  if(val!==null && val.trim()){ p.name=val.trim(); render(); toast('已更新人设名称'); }
+}
+function addPersona(){
+  const val = prompt('新人设名称（例如：德国采购经理）'); if(!val || !val.trim()) return;
+  const mkt = prompt('对应市场（如 DE / US / JP）','US') || 'US';
+  personas.push({id:'p'+Date.now(), name:val.trim(), mkt:mkt.trim().toUpperCase(), st:'pending'});
+  render(); toast('已新增人设，待确认');
+}
+function topicsBlock(){
+  return `<div class="field-row"><div class="k">主题（品类话题）</div>
+    <div class="v">${topics.map(t=>`<span class="topic-chip ${t.st==='pending'?'pending':''}" onclick="toggleTopic('${t.id}')" title="${t.st==='pending'?'AI新识别，点击确认':'点击可取消确认'}">${t.name}${t.st==='pending'?' · 待确认':''} <span class="x">${t.st==='pending'?'✓':'✕'}</span></span>`).join(' ')}
+      <div class="src" style="margin-top:8px"><span class="badge grey">AI识别（产品线×人设决策因子生成）</span></div>
+    </div>
+    <div><button class="btn sm" onclick="addTopic()">＋ 新增主题</button></div>
+  </div>`;
+}
+function toggleTopic(id){ const t=topics.find(x=>x.id===id); t.st = t.st==='ok'?'pending':'ok'; render(); toast(t.st==='ok'?'已确认主题「'+t.name+'」，下次全景审计纳入热力图':'已取消确认，暂不进入热力图'); }
+function addTopic(){
+  const val = prompt('新主题名称（品类话题）'); if(!val || !val.trim()) return;
+  topics.push({id:'t'+Date.now(), name:val.trim(), st:'pending', origIndex:null});
+  render(); toast('已新增主题，待确认，确认后下次全景审计生效');
+}
+function togglePromptLib(i){ const p=promptLib[i]; p.st = p.st==='ok'?'pending':'ok'; render(); }
+function addPrompt(){
+  const q = prompt('新提问内容'); if(!q || !q.trim()) return;
+  promptLib.push({q:q.trim(), pid:personas[0]?personas[0].id:'', ev:1, st:'pending'});
+  render(); toast('已新增提问，证据不足2项，需手动确认');
+}
+
+function wizNext(){ if(!wizValid(WIZ_STEP)) return; if(WIZ_STEP<4){WIZ_STEP++;render();} else {WIZ_SAMPLING=true;render();} }
+function wizBack(){ if(WIZ_STEP>1){WIZ_STEP--;render();} }
+function finishSampling(){ WIZ_SAMPLING=false; CFG_MODE='edit'; VIEW='result'; render(); toast('首次监测完成，已生成监测结果'); }
+
+function editView(){
+  const pendingInputs = inputs.filter(x=>x.st==='pending').length + topics.filter(t=>t.st==='pending').length;
+  const pendingPersonas = personas.filter(p=>p.st==='pending').length;
+  const pendingPrompts = promptLib.filter(p=>p.st==='pending').length;
+  const pendingCount = pendingInputs+pendingPersonas+pendingPrompts;
+  const parts=[];
+  if(pendingInputs) parts.push(pendingInputs+'项输入/主题');
+  if(pendingPersonas) parts.push(pendingPersonas+'个人设');
+  if(pendingPrompts) parts.push(pendingPrompts+'条提问');
+  const pendingStrip = pendingCount? `<div class="pending-strip">
+    <span style="flex:1"><b>${pendingCount} 项待确认</b> — ${parts.join('、')}</span>
+    <button class="btn sm primary" onclick="jumpFirstPending()">逐项处理</button></div>` : '';
+
+  const tabs = `<div class="seg-sm" style="margin-bottom:18px">
+    <button class="${CFG_TAB==='inputs'?'on':''}" onclick="setCfgTab('inputs')">输入底座${pendingInputs?` (${pendingInputs})`:''}</button>
+    <button class="${CFG_TAB==='personas'?'on':''}" onclick="setCfgTab('personas')">买家人设${pendingPersonas?` (${pendingPersonas})`:''}</button>
+    <button class="${CFG_TAB==='prompts'?'on':''}" onclick="setCfgTab('prompts')">提问库${pendingPrompts?` (${pendingPrompts})`:''}</button>
+  </div>`;
+
+  let body='';
+  if(CFG_TAB==='inputs'){
+    body = inputs.map(x=>fieldRow(x,'edit')).join('')
+    + topicsBlock()
+    + `<div class="tiny muted" style="margin-top:14px">修改竞对名单或品牌别名会重算下游基线，历史数据不可比，保存前会二次确认影响范围</div>`;
+  } else if(CFG_TAB==='personas'){
+    body = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${personas.map(personaCard).join('')}</div>
+    <div style="margin-top:14px"><button class="btn sm" onclick="addPersona()">＋ AI生成新人设</button></div>`;
+  } else {
+    body = `<table class="tbl"><thead><tr><th style="width:24px"></th><th>提问</th><th>人设</th><th>证据</th><th>状态</th></tr></thead><tbody>
+    ${promptLib.map((p,i)=>`<tr class="${p.st==='pending'?'changed':''}"><td><span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePromptLib(${i})">${p.st==='ok'?'✓':''}</span></td><td style="font-weight:600">${p.q}</td><td class="tiny">${(personas.find(x=>x.id===p.pid)||{}).name||''}</td>
+      <td class="mono">${p.ev}/4</td><td>${p.st==='ok'?'<span class="badge ok">已入库</span>':'<span class="badge gold">待确认</span>'}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:14px"><button class="btn sm" onclick="addPrompt()">＋ 手动新增</button></div>`;
+  }
+  return pendingStrip + tabs + `<div class="card">${body}</div>`;
+}
+function setCfgTab(t){CFG_TAB=t;render();}
+function jumpFirstPending(){
+  if(inputs.some(x=>x.st==='pending')) setCfgTab('inputs');
+  else if(personas.some(p=>p.st==='pending')) setCfgTab('personas');
+  else setCfgTab('prompts');
+}
+
+function setView(v){VIEW=v;render();}
+function render(){
+  document.getElementById('main').innerHTML = pageHead() + (VIEW==='result'? resultView() : configView());
+}
+render();
+</script>
+</body>
+</html>
