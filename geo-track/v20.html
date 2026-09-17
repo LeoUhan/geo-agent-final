@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEO 智能体 · 可见性监测</title>
+<style>
+:root{
+  /* ---- 品牌与状态色（严格取自设计规范token表，不新增颜色）---- */
+  --brand:#4152F6; --brand-dark:#2F3FD0; --brand-light:#E8EAFE; --brand-light-2:#DEE2FD;
+  --bg-light:#EEF1F7; --bg-dark:#171A21;
+  --ink:#1D2129; --ink-70:#4E5969; --ink-50:#86909C; --ink-30:#C9CDD4;
+  --line:#E5E6EB; --line-2:#F2F3F5;
+  --ok:#00B42A; --ok-bg:#E8FFEA;
+  --warn:#FF7D00; --warn-bg:#FFF3E5;
+  --risk:#F53F3F; --risk-bg:#FEE9E8;
+  --inherit-purple:#722ED1; --inherit-purple-bg:#F3ECFC;
+  --share-cyan:#14A9A9; --share-cyan-bg:#E3F7F7;
+  --white:#ffffff;
+  /* 别名：兼容既有类名（gold=warn，teal=brand，cream=页面浅色背景），值仍取自上面同一套token，不引入新色 */
+  --gold:var(--warn); --gold-100:var(--warn-bg);
+  --teal:var(--brand); --teal-800:var(--brand-dark); --teal-600:var(--brand); --teal-900:var(--bg-dark);
+  --teal-050:var(--brand-light); --teal-100:var(--brand-light-2);
+  --cream:var(--bg-light);
+  --r-sm:4px; --r:8px; --r-lg:16px;
+  --sh-1:none; --sh-2:0 4px 14px rgba(23,26,33,.10);
+  --f-ui:'PingFang SC','Microsoft YaHei',system-ui,-apple-system,sans-serif;
+  --f-mono:var(--f-ui);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:var(--f-ui);background:var(--bg-light);color:var(--ink);font-size:14px;line-height:1.57;-webkit-font-smoothing:antialiased}
+.mono{font-variant-numeric:tabular-nums}
+button,input,select,textarea{font-family:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.app{display:flex;min-height:100vh}
+
+/* ---- 侧边栏 ---- */
+.sidebar{width:240px;flex-shrink:0;background:var(--bg-dark);color:#e7e9ee;display:flex;flex-direction:column}
+.sb-brand{display:flex;align-items:center;gap:8px;padding:16px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-brand .logo{color:var(--brand-light-2);font-weight:600;font-size:15px}
+.sb-brand .name{font-weight:500;font-size:13px}
+.sb-brand .sub{font-size:12px;color:#8a8f9c;margin-top:1px}
+.nav{padding:8px 8px;flex:1}
+.nav .grp-title{font-size:12px;color:#8a8f9c;padding:8px 8px 4px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 8px;border-radius:8px;color:#c4c8d4;font-size:14px;font-weight:500;cursor:default;margin-bottom:1px}
+.nav-item.active{background:rgba(65,82,246,.22);color:#fff}
+.nav-item .ico{width:16px;text-align:center;opacity:.85}
+.nav-sub{margin-left:24px;margin-top:2px;margin-bottom:4px}
+.nav-sub .s-item{display:flex;align-items:center;justify-content:space-between;padding:8px 8px;border-radius:8px;font-size:12px;color:#9298a6;cursor:pointer}
+.nav-sub .s-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-sub .s-item.on{background:rgba(65,82,246,.28);color:#fff;font-weight:600}
+.sb-foot{padding:12px 16px 16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:#8a8f9c}
+
+/* ---- 主区 / 页面框架 ---- */
+.main{flex:1;min-width:0;overflow-y:auto}
+.topbar{height:56px;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 24px;background:var(--white);position:sticky;top:0;z-index:5}
+.crumb{font-size:12px;color:var(--ink-50)}
+.content{max-width:980px;margin:0 auto;padding:24px 24px 40px}
+
+.pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:12px;flex-wrap:wrap}
+.pagehead h1{font-size:20px;line-height:28px;margin:0;font-weight:600}
+.pagehead .desc{font-size:14px;line-height:22px;color:var(--ink-70);margin-top:4px;max-width:640px}
+
+/* 页面级 Tabs（规范 5.1）：44px 高，选中项品牌蓝 600 字重 + 2px 指示线 */
+.seg{display:flex;border-bottom:1px solid var(--line);gap:0}
+.seg button{border:none;background:none;height:44px;padding:0 16px;font-size:14px;font-weight:500;color:var(--ink-70);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.seg button.on{color:var(--brand);font-weight:600;border-bottom-color:var(--brand)}
+
+.card{background:var(--white);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px}
+.sec{margin-top:24px}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.sec-head h2{font-size:16px;line-height:24px;margin:0;font-weight:500}
+.sec-head .sub{font-size:12px;color:var(--ink-50)}
+
+/* 胶囊状态标签（规范 2.4 / 9） */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:20px;font-weight:500;padding:0 8px;border-radius:999px}
+.badge.teal{background:var(--brand-light);color:var(--brand)}
+.badge.inherit{background:var(--inherit-purple-bg);color:var(--inherit-purple)}
+.badge.gold{background:var(--warn-bg);color:var(--warn)}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.risk{background:var(--risk-bg);color:var(--risk)}
+.badge.grey{background:var(--line-2);color:var(--ink-70)}
+
+/* 控件：32px 高，8px 圆角（规范 10） */
+.btn{font-family:inherit;font-size:14px;font-weight:500;border-radius:8px;height:32px;padding:0 14px;border:1px solid var(--line);background:var(--white);color:var(--ink);cursor:pointer;transition:border-color .16s ease-out,background .16s ease-out,color .16s ease-out}
+.btn:hover{border-color:var(--ink-30)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.primary:hover{background:var(--brand-dark)}
+.btn.sm{height:26px;padding:0 10px;font-size:12px} /* 例外：用于密集行内操作，脱离32px基准高度以避免撑破紧凑表格行 */
+.btn[disabled]{opacity:.5;cursor:not-allowed;color:var(--ink-30)}
+.btn[disabled]:hover{border-color:var(--line)}
+.inp{font-family:inherit;font-size:14px;height:32px;padding:0 12px;border:1px solid var(--line);border-radius:8px;outline:none;width:100%;transition:border-color .16s ease-out}
+.inp:focus{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-light)}
+select.inp{height:32px}
+textarea.inp{height:auto;padding:8px 12px}
+
+.tiny{font-size:12px;line-height:20px}
+.muted{color:var(--ink-50)}
+.linkbtn{color:var(--brand);font-weight:500;cursor:pointer;background:none;border:none;font-family:inherit;font-size:inherit;padding:0}
+
+/* 表格（规范 9） */
+table.tbl{width:100%;border-collapse:collapse;font-size:14px;border:1px solid var(--line);border-radius:8px}
+table.tbl th{text-align:left;font-weight:500;color:var(--ink-70);font-size:12px;padding:8px 16px;background:var(--line-2);border-bottom:1px solid var(--line)}
+table.tbl td{padding:12px 16px;border-bottom:1px solid var(--line);vertical-align:top}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl tr.changed td{background:var(--warn-bg)}
+table.tbl tr.filtered-out{display:none}
+table.tbl td.num,table.tbl th.num{text-align:right}
+
+/* 产品切换风格的次级 Tabs（规范 5.2，用于各处二级筛选/模式切换） */
+.seg-sm{display:inline-flex;background:var(--line-2);border-radius:8px;padding:2px}
+.seg-sm button{border:none;background:none;font-family:inherit;font-size:12px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer;color:var(--ink-70)}
+.seg-sm button.on{background:var(--brand-light);color:var(--brand);font-weight:600}
+
+.checkbox{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--ink-30);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:#fff;flex-shrink:0;background:#fff;transition:background .16s ease-out,border-color .16s ease-out}
+.checkbox.on{background:var(--brand);border-color:var(--brand)}
+.checkbox.disabled{opacity:.5;cursor:not-allowed}
+
+/* 可信度提示条 */
+.credbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:24px;background:var(--white)}
+.credbar .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.credbar b{font-size:14px;font-weight:600}
+.credbar .meta{color:var(--ink-70);font-size:12px}
+.credbar .sep{width:1px;align-self:stretch;background:var(--line)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.kpi{padding:16px;border-radius:var(--r);border:1px solid var(--line)}
+.kpi .lb{font-size:12px;color:var(--ink-50);font-weight:500}
+.kpi .val{font-size:24px;line-height:32px;font-weight:600;margin-top:4px}
+.kpi .delta{font-size:12px;font-weight:600;margin-left:6px}
+.kpi .delta.up{color:var(--ok)}
+.kpi .delta.down{color:var(--risk)}
+.kpi .abs{font-size:12px;color:var(--ink-50);margin-top:4px}
+.kpi .def{font-size:12px;color:var(--ink-50);margin-top:8px;line-height:20px}
+
+.aux-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+.aux-card{padding:12px;border:1px dashed var(--line);border-radius:var(--r)}
+.aux-card .lb{font-size:12px;color:var(--ink-50);font-weight:500}
+.aux-card .val{font-size:20px;line-height:28px;font-weight:500;margin-top:4px}
+.senti-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin-top:8px}
+.bar{height:8px;border-radius:4px;background:var(--line-2);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+
+.chart-wrap{margin-top:16px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:12px}
+.legend span{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:var(--ink-70)}
+.legend i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.legend .off{opacity:.3}
+
+.heat-table{width:100%;border-collapse:collapse;font-size:12px}
+.heat-table th{font-weight:500;color:var(--ink-50);text-align:center;padding:0 4px 8px}
+.heat-table th:first-child{text-align:left}
+.heat-table td{text-align:center;padding:4px}
+.heat-table td:first-child{text-align:left;font-weight:500;padding:8px 8px 8px 0;white-space:nowrap;font-size:14px}
+.heat-cell{width:100%;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;cursor:pointer;transition:transform .16s ease-out}
+.heat-cell:hover{transform:scale(1.06)}
+.filter-chip{display:inline-flex;align-items:center;gap:6px;background:var(--warn-bg);color:var(--warn);padding:0 8px;height:20px;border-radius:999px;font-size:12px;font-weight:500;margin-bottom:12px}
+.filter-chip button{background:none;border:none;color:var(--warn);cursor:pointer;font-weight:600;font-family:inherit}
+
+.hit{display:inline-flex;width:20px;height:20px;border-radius:4px;align-items:center;justify-content:center;font-size:10px;font-weight:600;margin-right:4px}
+.hit.rec{background:var(--ok-bg);color:var(--ok)}
+.hit.men{background:var(--warn-bg);color:var(--warn)}
+.hit.no{background:var(--line-2);color:var(--ink-30)}
+
+.wizard{max-width:600px;margin:0 auto}
+.steps-bar{display:flex;align-items:center;margin-bottom:24px}
+.steps-bar .s{display:flex;align-items:center;flex:1}
+.steps-bar .s .circ{width:24px;height:24px;border-radius:50%;background:var(--line-2);color:var(--ink-50);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.steps-bar .s.done .circ{background:var(--brand);color:#fff}
+.steps-bar .s.now .circ{background:var(--ink);color:#fff}
+.steps-bar .s .lb{font-size:12px;margin-left:8px;color:var(--ink-50);white-space:nowrap}
+.steps-bar .s.now .lb,.steps-bar .s.done .lb{color:var(--ink);font-weight:600}
+.steps-bar .rule{flex:1;height:1px;background:var(--line);margin:0 12px}
+.steps-bar .rule.done{background:var(--brand)}
+.wizcard h3{margin:0 0 4px;font-size:16px;font-weight:600}
+.wizcard .desc{color:var(--ink-50);font-size:12px;margin-bottom:16px}
+.field-row{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line);gap:16px}
+.field-row:last-child{border-bottom:none}
+.field-row .k{font-size:14px;font-weight:500;min-width:110px;flex-shrink:0}
+.field-row .v{font-size:14px;color:var(--ink-70);flex:1}
+.field-row .src{margin-top:4px}
+.persona-card{border:1px solid var(--line);border-radius:12px;padding:12px;position:relative}
+.persona-card.pending{border-color:var(--warn);background:var(--warn-bg)}
+.persona-card h4{margin:0 0 4px;font-size:14px;font-weight:500}
+.persona-card .role{font-size:12px;color:var(--ink-50);margin-bottom:8px}
+.wiz-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px}
+.wiz-warn{font-size:12px;color:var(--warn);font-weight:500}
+.progress-wrap{text-align:center;padding:60px 20px}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--brand);margin:0 auto 16px;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.pending-strip{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;border:1px solid var(--warn);background:var(--warn-bg);border-radius:var(--r-lg)}
+.pending-strip b{font-weight:600}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .16s ease-out;z-index:60}
+.toast.show{opacity:1}
+.drawer-mask{position:fixed;inset:0;background:rgba(23,26,33,.32);opacity:0;pointer-events:none;transition:opacity .16s ease-out;z-index:40}
+.drawer-mask.show{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:-440px;width:420px;max-width:90vw;height:100%;background:var(--white);box-shadow:var(--sh-2);transition:right .16s ease-out;z-index:41;overflow-y:auto;padding:24px}
+.drawer.show{right:0}
+.drawer h3{margin:0 0 4px;font-size:16px;font-weight:600}
+.drawer .close{position:absolute;top:20px;right:20px;cursor:pointer;color:var(--ink-50);font-size:16px;background:none;border:none}
+.answer-block{background:var(--bg-light);border-radius:var(--r);padding:12px;margin-top:8px;font-size:12px;line-height:1.7;border:1px solid var(--line)}
+.answer-block mark{background:var(--warn-bg);padding:0 2px;border-radius:2px}
+.demo-toggle{padding:8px 12px;border:1px dashed var(--ink-30);border-radius:var(--r);margin-bottom:16px;font-size:12px;color:var(--ink-50);background:var(--white)}
+
+/* ---- 弹窗（居中模态，区别于右侧详情抽屉） ---- */
+.modal-mask{position:fixed;inset:0;background:rgba(23,26,33,.4);opacity:0;pointer-events:none;transition:opacity .16s ease-out;z-index:60;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-mask.show{opacity:1;pointer-events:auto}
+.modal-box{background:var(--white);border-radius:var(--r-lg);width:560px;max-width:100%;max-height:88vh;overflow-y:auto;box-shadow:var(--sh-2);transform:translateY(8px);transition:transform .16s ease-out}
+.modal-mask.show .modal-box{transform:translateY(0)}
+.modal-head{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;position:relative}
+.modal-head h3{margin:0;font-size:16px;font-weight:600}
+.modal-head p{margin:4px 0 0;font-size:12px;color:var(--ink-50)}
+.modal-head .close{position:absolute;top:16px;right:20px;background:none;border:none;cursor:pointer;color:var(--ink-50);font-size:15px}
+.modal-body{padding:20px 24px}
+.modal-foot{padding:12px 24px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.mfield{margin-bottom:20px}
+.mfield label{font-size:12px;font-weight:600;display:block;margin-bottom:8px}
+.mfield .meta{font-size:12px;color:var(--ink-50);margin-top:8px}
+.chiplist{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.chip-item{display:inline-flex;align-items:center;gap:6px;background:var(--line-2);border:1px solid var(--line);border-radius:999px;height:24px;padding:0 6px 0 12px;font-size:12px}
+.chip-item.pending{background:var(--warn-bg);border-color:var(--warn)}
+.chip-item button{background:none;border:none;color:var(--ink-50);cursor:pointer;font-size:11px;padding:0 2px}
+.chip-item button.ok{color:var(--ok);font-weight:600}
+.chip-add{display:flex;gap:8px}
+.chip-add input{flex:1}
+
+/* ---- 主题 chips ---- */
+.topic-chip{display:inline-flex;align-items:center;gap:6px;background:var(--brand-light);color:var(--brand);border:1px solid var(--brand-light-2);border-radius:999px;height:24px;padding:0 8px 0 12px;font-size:12px;font-weight:500;cursor:pointer}
+.topic-chip.pending{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.topic-chip .x{opacity:.7;font-size:10px}
+
+/* ---- 概览：工作记录卡 / 轨迹 ---- */
+.workcard{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;margin-bottom:12px;background:var(--white)}
+.workcard-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.workcard-tags{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.wtitle{font-size:14px;font-weight:600;margin-top:6px}
+.wtrack{margin-top:12px}
+.wt-node{display:flex;gap:10px;position:relative;padding-bottom:10px}
+.wt-node:last-child{padding-bottom:0}
+.wt-node:not(:last-child)::before{content:'';position:absolute;left:5px;top:16px;bottom:-4px;width:1px;background:var(--line)}
+.wt-dot{width:10px;height:10px;border-radius:50%;background:var(--brand);flex-shrink:0;margin-top:4px;position:relative;z-index:1}
+.wt-dot.ops{background:var(--warn)}
+.wt-who{font-size:12px;font-weight:600}
+.wt-who .tag{font-size:11px;font-weight:500;color:var(--brand);background:var(--brand-light);padding:0 8px;height:20px;line-height:20px;border-radius:999px;margin-left:6px}
+.wt-note{font-size:12px;color:var(--ink-50);margin-top:2px}
+.pend-card{border:1px solid var(--warn);background:var(--warn-bg);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pend-card .t{font-size:14px;font-weight:600}
+.pend-card .d{font-size:12px;color:var(--ink-70);margin-top:3px}
+.ov-metric-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+
+/* ---- 设置：开关 / 额度条 / 权限矩阵 ---- */
+.switch{width:36px;height:20px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;flex-shrink:0;transition:background .16s ease-out}
+.switch.on{background:var(--brand)}
+.switch .knob{width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:left .16s ease-out;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.switch.on .knob{left:18px}
+.quota-bar{height:8px;border-radius:4px;background:var(--line-2);overflow:hidden;margin-top:8px}
+.quota-bar i{display:block;height:100%;border-radius:4px;background:var(--brand)}
+table.tbl.perm td,table.tbl.perm th{text-align:center}
+table.tbl.perm td:first-child,table.tbl.perm th:first-child{text-align:left}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="sb-brand"><span class="logo">◈</span><div><div class="name">独立站超级智能体</div><div class="sub">统一后台框架</div></div></div>
+    <nav class="nav">
+      <div class="grp-title">GEO 智能体</div>
+      <div class="nav-item active"><span class="ico">✳</span>GEO 智能体</div>
+      <div class="nav-sub" id="navSub"></div>
+    </nav>
+    <div class="sb-foot">框架级 DEMO · 交互原型 v3</div>
+  </aside>
+  <div class="main">
+    <div class="topbar"><span class="crumb" id="crumb">GEO 智能体 / 可见性监测</span></div>
+    <div class="content" id="main"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="drawer-mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer"></div>
+<div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()"></div>
+
+<script>
+/* ============ 状态（真实可变） ============ */
+const KPIS = [
+  {id:'mention', zh:'品牌提及率', v:42, base:28, prev:38, moe:2.8, hex:'#4152F6', def:'品牌出现在AI回答中的比例占比', formula:'包含品牌提及的回答数 ÷ AI回答总次数 × 100%'},
+  {id:'rec', zh:'品牌推荐率', v:28, base:15, prev:24, moe:2.8, hex:'#722ED1', def:'衡量是仅提到品牌，还是主动、明确、有理有据地推荐品牌', formula:'品牌出现在推荐/比较语境且推荐倾向为正的回答数 ÷ 回答中有推荐的有效回答数'},
+  {id:'cite', zh:'官网引用率', v:17, base:9, prev:15, moe:2.8, hex:'#14A9A9', def:'衡量AI把品牌官网当作信息来源的比例', formula:'含官网链接或明确提及来自品牌网站/官网/站点的回答数 ÷ AI回答总次数'},
+  {id:'sov', zh:'声量份额', v:27, base:17, prev:23, moe:2.8, hex:'#00B42A', def:'同一批问题里，AI提到的所有品牌中我们占多少', formula:'我方被提到的回答数 ÷ 竞品名单内所有品牌被提到的回答数之和'}
+];
+const TREND = {
+  weeks:['W-6','W-5','W-4','W-3','W-2','W-1','本周'],
+  mention:[36,36,37,39,37,39,42], rec:[24,25,25,26,25,26,28], cite:[13,14,14,15,14,15,17], sov:[22,22,23,24,22,24,27]
+};
+const AUX = { pos:{v:'2.3', prev:'3.1'}, senti:{pos:71,neu:24,neg:5,fir:7} };
+
+const ENGINE_NAMES = ['ChatGPT','Perplexity','Google AI Overviews','Gemini','Copilot'];
+const INTENTS = ['信息型','比较型','推荐型','交易型'];
+const TREND_MONTHS=['06-01','07-01','08-01','09-01'];
+const COMPETITORS = [
+  {name:'APW（我方）', share:27, color:'#4152F6', trend:[22,24,26,27]},
+  {name:'Flow International', share:23, color:'#722ED1', trend:[26,25,24,23]},
+  {name:'OMAX', share:19, color:'#14A9A9', trend:[20,20,19,19]},
+  {name:'Bystronic', share:13, color:'#00B42A', trend:[14,13,13,13]},
+  {name:'Techni Waterjet', share:6, color:'#FF7D00', trend:[5,5,6,6]},
+  {name:'其他/长尾品牌', share:12, color:'#C9CDD4', trend:[13,13,12,12]}
+];
+const FACTORS = ['切割精度','无热影响区','交期与产能','价格与TCO','本地服务与培训','认证与合规'];
+const FACTOR_COVERAGE = { us:[88,90,35,52,40,45], comp:[80,78,70,60,85,82] };
+const AUDITS = [
+  {date:'2026-09-01', mention:42, rec:28, cite:17, sov:27, n:1200},
+  {date:'2026-08-01', mention:39, rec:26, cite:15, sov:24, n:1150},
+  {date:'2026-07-01', mention:37, rec:25, cite:14, sov:22, n:1080},
+  {date:'2026-06-01', mention:36, rec:24, cite:13, sov:22, n:1020}
+];
+const RECENT_EVENTS = [
+  {t:'今天 05:00', e:'哨兵快照完成：100次观测，声量份额27%（较昨日+2pt，在误差范围内）'},
+  {t:'今天 05:04', e:'识别到新人设「汽车Tier-1工艺工程师」，待你确认'},
+  {t:'昨天 22:40', e:'「德语碳纤维方案页」发布满12天复检：该提问位次由3变为1'},
+  {t:'昨天 09:00', e:'周报已生成：声量份额较上周+4pt'}
+];
+const OVERVIEW_WORK = [
+  {kind:'人设与提问集', title:'识别到新买家角色「汽车Tier-1工艺工程师」，已生成配套监测提问', time:'今天', body:'从近期访客行为与官网询盘线索中，识别出一个此前未覆盖的买家角色，并已生成配套监测提问。', reviewed:true},
+  {kind:'月度审计', title:'9月可见度审计已完成，四项主指标全部上升', time:'2天前', body:'本月声量份额27%，较基线提升10个百分点，主要引擎表现均有改善。', reviewed:true},
+  {kind:'来源监测', title:'新发现一次来源引用：官网案例页被ChatGPT引用', time:'3天前', body:'案例页 /en/cases/titanium-aerospace 本周首次被ChatGPT引用为来源。', reviewed:false}
+];
+let ENGINES_ENABLED = {'ChatGPT':true,'Perplexity':true,'Google AI Overviews':true,'Gemini':false,'Copilot':false};
+let COLLECT_FREQ = {audit:'每月1次', sentinel:'每日1次'};
+const QUOTA = {tier:'成长版', used:640, total:1000, unit:'次监测额度', renew:'10-01 重置'};
+const PERMISSION_MATRIX = [
+  ['监测引擎数量','1个（Google）','3个（Google+2）','5个（全部）'],
+  ['全景审计频率','每月','每月','每月+按需'],
+  ['哨兵快照','不启用','每日','每日'],
+  ['来源图谱','不可见','可见','可见+导出'],
+  ['历史报告归档','近1期','近6期','不限'],
+  ['报告下载/分享','不可用','可用','可用+品牌定制'],
+  ['API/数据导出','不可用','不可用','可用']
+];
+const TIERS = ['入门版','成长版','专业版'];
+const SAMPLE_PROTOCOL = [
+  ['会话','每次采样使用全新会话，无登录态、无个性化历史，引擎保持默认参数'],
+  ['地区与语言','按人设市场路由：DE节点用德语、US节点用英语、JP节点用日语'],
+  ['采集方式','以界面实际返回内容为主要依据；另有第二套采集流程同步跑一遍做一致性核对'],
+  ['频率','全景审计每月1次（决策级）；哨兵快照每日1次（预警级）'],
+  ['判定','提及/推荐/引用/情感由模型自动判定，每期按比例抽样人工复核'],
+  ['失败处理','引擎无有效返回时不计入分母、不计费；有效返回率过低的周期标"样本不足"，不出结论']
+];
+const SAMPLE_METRICS = [
+  {l:'有效返回率', v:'97.4%', ok:true, note:'1,200次采样中1,169次有效返回'},
+  {l:'双源一致率', v:'91%', ok:true, note:'两套采集流程对同一提问同一引擎"是否命中"判断的一致比例'},
+  {l:'人工复核一致率', v:'96%', ok:true, note:'抽样人工复核结果与自动判定的一致比例'},
+  {l:'7日复现波动', v:'±3.1pp', ok:true, note:'同一批提问7天内重新采样的结果波动幅度'},
+  {l:'引擎漂移事件', v:'1次', ok:false, note:'W-3 ChatGPT模型更新导致三方系整体波动，已标注为引擎事件'}
+];
+const IAB_CHECKLIST = [
+  ['提问总量与类目覆盖','12条 · 覆盖5个主题', true],
+  ['四类意图覆盖','信息型/比较型/推荐型/交易型均有覆盖', true],
+  ['采样频率','成长版每周', true],
+  ['复现性披露','±3.1pp（7日复现）', true],
+  ['分引擎单独报告','5个引擎分别统计，不做合成分', true],
+  ['数据采集方式披露','界面实际返回为主，双源校验', true]
+];
+
+let BRAND = {
+  name:'APW · APW Waterjet · 安培威', nameSrc:'知识库继承', nameConf:98,
+  productLines:[{name:'五轴水刀切割系统'},{name:'三轴水刀'},{name:'高压泵与耗材'}], plSrc:'官网扫描', plConf:92,
+  market:'DE·US·JP ｜ DE·EN·JA', mktSrc:'知识库继承', mktConf:95,
+  competitors:[{name:'Flow Intl',st:'ok'},{name:'OMAX',st:'ok'},{name:'Bystronic',st:'ok'},{name:'Techni Waterjet',st:'pending'},{name:'KMT',st:'pending'}], compSrc:'知识库继承 + AI识别', compConf:81,
+  facts:[{text:'精度 ±0.05mm'},{text:'CE / AS9100 供应链'},{text:'交期 8–10 周'}], factSrc:'知识库继承', factConf:100
+};
+let personas = [
+  {id:'p1', name:'复材加工厂技术负责人', mkt:'DE', st:'ok'},
+  {id:'p2', name:'航空零部件采购经理', mkt:'US', st:'ok'},
+  {id:'p3', name:'精密加工车间主管', mkt:'US', st:'ok'},
+  {id:'p4', name:'日本商社设备采购担当', mkt:'JP', st:'ok'},
+  {id:'p6', name:'汽车 Tier-1 工艺工程师', mkt:'DE', st:'pending'}
+];
+let topics = [
+  {id:'t1', name:'碳纤维/复材切割', st:'ok', origIndex:0},
+  {id:'t2', name:'五轴水刀选型', st:'ok', origIndex:1},
+  {id:'t3', name:'水刀vs激光', st:'ok', origIndex:2},
+  {id:'t4', name:'钛合金航空加工', st:'ok', origIndex:3},
+  {id:'t5', name:'中国供应商评估', st:'ok', origIndex:4},
+  {id:'t6', name:'陶瓷基复合材料切割', st:'pending', origIndex:null}
+];
+const HEAT = { p1:[78,72,65,40,55], p2:[52,60,48,74,58], p3:[38,55,62,30,41], p4:[12,8,15,5,6], p6:[30,44,38,26,35] };
+
+let prompts = [
+  {q:'Welches 5-Achs-Wasserstrahlsystem eignet sich für CFRP ohne Delamination?', pid:'p1', mkt:'DE', intent:'比较型', hits:['rec','men','rec','no','men'], pos:'1/3', tr:'up', changed:true, samples:{runs:8,hits:7}, hist:[4,5,6,7]},
+  {q:'Which waterjet suppliers meet AS9100 for titanium aerospace parts?', pid:'p2', mkt:'US', intent:'信息型', hits:['rec','rec','men','men','no'], pos:'2/5', tr:'flat', changed:true, samples:{runs:10,hits:9}, hist:[6,7,8,9]},
+  {q:'Affordable 5-axis waterjet for a small job shop — total cost of ownership?', pid:'p3', mkt:'US', intent:'交易型', hits:['men','no','no','no','no'], pos:'3/5', tr:'flat', changed:false, samples:{runs:6,hits:4}, hist:[1,2,3,4]},
+  {q:'炭素繊維の加工に適したウォータージェット装置の海外メーカーは？', pid:'p4', mkt:'JP', intent:'信息型', hits:['no','no','no','no','no'], pos:'未命中', tr:'new', changed:true, samples:{runs:5,hits:5}, hist:[2,3,4,5]},
+  {q:'Waterjet vs laser for carbon fiber — which should a startup buy first?', pid:'p3', mkt:'US', intent:'比较型', hits:['men','rec','no','men','no'], pos:'仅提及', tr:'flat', changed:false, samples:{runs:9,hits:8}, hist:[5,6,7,8]},
+  {q:'Is APW reliable compared with Flow and OMAX on service and uptime?', pid:'p6', mkt:'DE', intent:'比较型', hits:['men','no','no','no','men'], pos:'仅提及', tr:'new', changed:true, samples:{runs:7,hits:5}, hist:[2,3,4,5]},
+  {q:'What is the typical lead time for a 5-axis waterjet in North America?', pid:'p2', mkt:'US', intent:'信息型', hits:['men','men','no','no','no'], pos:'仅提及', tr:'flat', changed:false, samples:{runs:8,hits:6}, hist:[3,4,5,6]},
+  {q:'Best waterjet cutting service near me for carbon fiber prototypes?', pid:'p3', mkt:'US', intent:'交易型', hits:['no','no','no','no','no'], pos:'未命中', tr:'flat', changed:false, samples:{runs:6,hits:6}, hist:[3,4,5,6]},
+  {q:'Which 5-axis waterjet brand should I buy for aerospace-grade titanium?', pid:'p2', mkt:'US', intent:'推荐型', hits:['rec','men','rec','no','no'], pos:'1/4', tr:'up', changed:true, samples:{runs:9,hits:8}, hist:[5,6,7,8]},
+  {q:'Wasserstrahlschneiden für Batteriegehäuse: welcher Anbieter liefert am schnellsten?', pid:'p6', mkt:'DE', intent:'推荐型', hits:['men','no','no','no','no'], pos:'仅提及', tr:'new', changed:true, samples:{runs:6,hits:3}, hist:[0,1,2,3]},
+  {q:'CFRPの分層を避ける水刀切断の推奨設定は？', pid:'p4', mkt:'JP', intent:'信息型', hits:['no','men','no','no','no'], pos:'仅提及', tr:'flat', changed:false, samples:{runs:5,hits:4}, hist:[1,2,3,4]},
+  {q:'Should I outsource CFRP waterjet cutting or buy my own machine?', pid:'p1', mkt:'DE', intent:'比较型', hits:['men','men','no','men','no'], pos:'仅提及', tr:'flat', changed:false, samples:{runs:8,hits:7}, hist:[4,5,6,7]}
+];
+const SOURCES = [
+  {dom:'compositesworld.com', cover:'复材加工·工艺对比', cited:'五引擎高频', citeCount:34, us:'无提及', risk:true},
+  {dom:'reddit.com/r/Machinists', cover:'设备选型讨论', cited:'ChatGPT中频', citeCount:19, us:'1条旧帖', risk:false},
+  {dom:'thefabricator.com', cover:'金属加工', cited:'AI Overviews中频', citeCount:15, us:'无提及', risk:true},
+  {dom:'youtube.com', cover:'试切演示视频', cited:'Gemini高频', citeCount:12, us:'有频道·未结构化', risk:false},
+  {dom:'aerospacemanufacturingtech.com', cover:'钛合金航空加工', cited:'Perplexity中频', citeCount:9, us:'无提及', risk:true},
+  {dom:'flowwaterjet.com', cover:'竞对官网技术页', cited:'五引擎高频', citeCount:28, us:'—（竞对来源）', risk:false}
+];
+let promptLib = [
+  {q:'Welches 5-Achs-Wasserstrahlsystem eignet sich für CFRP ohne Delamination?', pid:'p1', ev:3, st:'ok'},
+  {q:'Which waterjet suppliers meet AS9100 for titanium aerospace parts?', pid:'p2', ev:3, st:'ok'},
+  {q:'炭素繊維の加工に適したウォータージェット装置の海外メーカーは？', pid:'p4', ev:1, st:'pending'},
+  {q:'Is APW a reliable waterjet brand compared with Flow and OMAX?', pid:'p6', ev:2, st:'ok'},
+  {q:'Wasserstrahlschneiden für Batteriegehäuse: Taktzeit und Lieferzeit in Deutschland?', pid:'p6', ev:3, st:'ok'},
+  {q:'Welcher Anbieter hat die kürzeste Lieferzeit für CFRP-Karosserieteile?', pid:'p6', ev:1, st:'pending'}
+];
+
+let MODULE='overview'; // overview | track | report
+let VIEW='result';
+let RESULT_TAB='overview';
+let INTENT_FILTER='全部';
+let ENGINE_FILTER=null;
+let CFG_MODE='first';
+let WIZ_STEP=1;
+let WIZ_SAMPLING=false;
+let CFG_TAB='inputs';
+let SHOW_ALL_PROMPTS=false;
+let HEAT_METRIC='topic';
+let HEAT_FILTER=null;
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),2400)}
+function openDrawer(html){document.getElementById('drawer').innerHTML=html;document.getElementById('mask').classList.add('show');document.getElementById('drawer').classList.add('show')}
+function closeDrawer(){document.getElementById('mask').classList.remove('show');document.getElementById('drawer').classList.remove('show')}
+function openModal(html){document.getElementById('modalMask').innerHTML=html;document.getElementById('modalMask').classList.add('show')}
+function closeModal(){document.getElementById('modalMask').classList.remove('show')}
+function pt(a,b){const x=a-b;return (x>=0?'+':'')+x+'pt'}
+function esc(s){return (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}
+
+function pageHead(){
+  return `<div class="pagehead">
+    <div><h1>可见性监测</h1><div class="desc">从品牌/人设/提问到采样结果，本模块只呈现"观测到了什么"，诊断与建议在下一模块。</div></div>
+    <div class="seg">
+      <button class="${VIEW==='result'?'on':''}" onclick="setView('result')">监测结果</button>
+      <button class="${VIEW==='config'?'on':''}" onclick="setView('config')">监测配置</button>
+    </div>
+  </div>`;
+}
+
+/* ============ 结果视图 ============ */
+function credBar(){
+  return `<div class="credbar">
+    <span class="dot"></span>
+    <b>全景审计 · 09-01</b>
+    <span class="meta">样本量 n=1,200 · 误差带 ±2.8pp</span>
+    <span class="sep"></span>
+    <span class="badge teal">决策级数据</span>
+    <span class="meta">下次全景审计 10-01，期间更新为哨兵快照，仅供方向参考</span>
+  </div>`;
+}
+
+function lineChart(){
+  const w=740,ht=176,padL=8,padR=8,padT=14,padB=22;
+  const weeks=TREND.weeks;
+  const maxV=50;
+  const x=i=>padL+i*((w-padL-padR)/(weeks.length-1));
+  const y=v=>ht-padB-(v/maxV)*(ht-padT-padB);
+  let svg=`<svg viewBox="0 0 ${w} ${ht}" style="width:100%;height:${ht}px;overflow:visible">`;
+  for(let g=0;g<=3;g++){const gy=padT+g*((ht-padT-padB)/3);svg+=`<line x1="${padL}" y1="${gy}" x2="${w-padR}" y2="${gy}" stroke="#eef0ec" stroke-width="1"/>`;}
+  KPIS.forEach(k=>{
+    const el=document.getElementById('leg-'+k.id);
+    if(el && el.dataset.off==='1') return;
+    const data=TREND[k.id];
+    const pts=data.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+    svg+=`<polyline points="${pts}" fill="none" stroke="${k.hex}" stroke-width="${k.id==='mention'?2.6:1.7}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    data.forEach((v,i)=>svg+=`<circle cx="${x(i)}" cy="${y(v)}" r="2.6" fill="${k.hex}"/>`);
+  });
+  weeks.forEach((wl,i)=>svg+=`<text x="${x(i)}" y="${ht-4}" font-size="10" fill="#86909C" text-anchor="middle" font-family="PingFang SC">${wl}</text>`);
+  svg+='</svg>';
+  return svg;
+}
+
+function kpiBlock(){
+  const chips = KPIS.map(k=>`<div class="kpi" style="border-color:${k.hex}55">
+    <div class="lb">${k.zh}</div>
+    <div class="val" style="color:${k.hex}">${k.v}<span style="font-size:14px">%</span><span class="delta ${k.v>=k.prev?'up':'down'}">${pt(k.v,k.prev)}</span></div>
+    <div class="abs">较基线 ${k.base}%（${pt(k.v,k.base)}）· ±${k.moe}pp</div>
+    <div class="def" title="计算公式：${k.formula.replace(/"/g,'&quot;')}">${k.def}</div>
+    <div class="tiny muted" style="margin-top:4px;line-height:1.5">公式：${k.formula}</div>
+  </div>`).join('');
+  const legend = KPIS.map(k=>`<span id="leg-${k.id}" data-off="0" onclick="toggleLeg('${k.id}')"><i style="background:${k.hex}"></i>${k.zh}</span>`).join('');
+  return `<div class="kpi-row">${chips}</div>
+  <div class="chart-wrap">
+    <div class="legend">${legend}</div>
+    <div id="chartHolder">${lineChart()}</div>
+  </div>
+  <div class="aux-row">
+    <div class="aux-card"><div class="lb">辅助 · 平均位次</div><div class="val">${AUX.pos.v} <span class="tiny muted" style="font-weight:400">从 ${AUX.pos.prev}</span></div>
+      <div class="tiny muted" style="margin-top:6px">衡量品牌在AI回答中的出现位置、列表排名、是否首先出现；只做趋势解释，不进合约</div></div>
+    <div class="aux-card"><div class="lb">辅助 · 讲对了吗</div>
+      <div class="val" style="font-size:12px;font-weight:600">正面 ${AUX.senti.pos}% · 中性 ${AUX.senti.neu}% · 负面 ${AUX.senti.neg}%
+        <span style="color:var(--risk);margin-left:6px">事实错误率 ${AUX.senti.fir}%</span></div>
+      <div class="senti-bar"><span style="width:${AUX.senti.pos}%;background:var(--ok)"></span><span style="width:${AUX.senti.neu}%;background:var(--line-2)"></span><span style="width:${AUX.senti.neg}%;background:var(--risk)"></span></div>
+      <div class="tiny muted" style="margin-top:6px">AI正确识别品牌，但引用或传播了错误的产品/价格/功能/企业历史等信息；事实错误率＝存在事实错误的品牌提及数÷品牌总提及数×100%</div>
+    </div>
+  </div>`;
+}
+function toggleLeg(id){const el=document.getElementById('leg-'+id);const off=el.dataset.off==='1';el.dataset.off=off?'0':'1';el.classList.toggle('off',!off);document.getElementById('chartHolder').innerHTML=lineChart();}
+
+function heatColor(v){const a=0.10+(v/100)*0.85;return `rgba(65,82,246,${a})`;}
+function subtabNav(){
+  const tabs = [['overview','总览'],['competitors','声量与竞对'],['prompts','提问明细'],['heatmap','人设×主题'],['sampling','采样与可信度'],['sources','来源图谱'],['history','历史报告']];
+  return `<div class="seg-sm" style="margin-bottom:18px;flex-wrap:wrap">${tabs.map(t=>`<button class="${RESULT_TAB===t[0]?'on':''}" onclick="setResultTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
+}
+function setResultTab(t){RESULT_TAB=t; if(t!=='prompts'){HEAT_FILTER=null;} render();}
+
+function groupBreakdown(keyFn, keys){
+  return keys.map(k=>{
+    const list = prompts.filter(p=>keyFn(p)===k);
+    const total = list.length || 1;
+    const mention = list.filter(p=>p.hits.some(h=>h!=='no')).length;
+    const rec = list.filter(p=>p.hits.some(h=>h==='rec')).length;
+    return {k, total:list.length, mentionPct:Math.round(mention/total*100), recPct:Math.round(rec/total*100)};
+  }).filter(r=>r.total>0);
+}
+function breakdownRows(rows){
+  const maxV = Math.max(...rows.map(r=>Math.max(r.mentionPct,r.recPct)),1);
+  return rows.map(r=>`<div class="field-row" style="padding:10px 0">
+    <div style="min-width:140px;font-size:12px;font-weight:600">${r.k} <span class="tiny muted">(n=${r.total})</span></div>
+    <div style="flex:1;padding:0 12px">
+      <div class="bar" style="margin-bottom:4px"><i style="width:${r.mentionPct/maxV*100}%;background:var(--brand)"></i></div>
+      <div class="bar"><i style="width:${r.recPct/maxV*100}%;background:var(--inherit-purple)"></i></div>
+    </div>
+    <div class="tiny mono" style="min-width:140px;text-align:right">被提及${r.mentionPct}%<br>被推荐${r.recPct}%</div>
+  </div>`).join('');
+}
+function dimensionBreakdownBlock(){
+  const engineRows = ENGINE_NAMES.map((name,i)=>{
+    const total = prompts.length;
+    const mention = prompts.filter(p=>p.hits[i]!=='no').length;
+    const rec = prompts.filter(p=>p.hits[i]==='rec').length;
+    return {k:name, total, mentionPct:Math.round(mention/total*100), recPct:Math.round(rec/total*100)};
+  });
+  const personaRows = groupBreakdown(p=>p.pid, personas.map(p=>p.id)).map(r=>({...r, k:(personas.find(p=>p.id===r.k)||{}).name||r.k}));
+  const marketRows = groupBreakdown(p=>p.mkt, ['DE','US','JP']);
+  return `<div class="sec"><div class="sec-head"><h2>主指标 · 分维度拆解</h2><span class="sub">品牌提及率/品牌推荐率，按引擎、人设、市场拆开看（蓝=被提及，紫=被推荐）</span></div>
+  <div class="card">
+    <div class="tiny" style="font-weight:700;margin-bottom:4px">按引擎</div>
+    ${breakdownRows(engineRows)}
+  </div></div>
+  <div class="sec"><div class="card">
+    <div class="tiny" style="font-weight:700;margin-bottom:4px">按人设</div>
+    ${breakdownRows(personaRows)}
+  </div></div>
+  <div class="sec"><div class="card">
+    <div class="tiny" style="font-weight:700;margin-bottom:4px">按市场</div>
+    ${breakdownRows(marketRows)}
+  </div></div>`;
+}
+function overviewTab(){
+  return `<div class="sec"><div class="sec-head"><h2>GEO效果 · IAB 四主指标</h2><span class="sub">先看变化量，再看绝对值</span></div><div class="card">${kpiBlock()}</div></div>`
+  + dimensionBreakdownBlock()
+  + `<div class="sec"><div class="sec-head"><h2>近期事件</h2><span class="sub">按时间倒序的原始记录，不做解释</span></div><div class="card">${RECENT_EVENTS.map(ev=>`<div class="field-row"><div class="k" style="min-width:78px;color:var(--ink-50);font-weight:500">${ev.t}</div><div class="v">${ev.e}</div></div>`).join('')}</div></div>`;
+}
+
+function samplingTab(){
+  return `<div class="sec"><div class="sec-head"><h2>采样规则</h2><span class="sub">怎么采、按什么规则判定</span></div>
+    <div class="card">${SAMPLE_PROTOCOL.map(r=>`<div class="field-row"><div class="k">${r[0]}</div><div class="v">${r[1]}</div></div>`).join('')}</div></div>
+  <div class="sec"><div class="sec-head"><h2>可信度指标</h2><span class="sub">证明这批数据靠不靠谱</span></div>
+    <div class="card">${SAMPLE_METRICS.map(m=>`<div class="field-row"><div class="k">${m.l}</div><div class="v mono" style="font-weight:800;color:${m.ok?'var(--ok)':'var(--warn)'}">${m.v}</div></div><div class="tiny muted" style="margin:-8px 0 12px">${m.note}</div>`).join('')}</div></div>
+  <div class="sec"><div class="sec-head"><h2>行业标准对照</h2><span class="sub">对齐 IAB 可见性测量标准的自查清单</span></div>
+    <div class="card"><table class="tbl"><thead><tr><th>检查项</th><th>本期情况</th><th>状态</th></tr></thead><tbody>
+    ${IAB_CHECKLIST.map(c=>`<tr><td style="font-weight:600">${c[0]}</td><td class="tiny">${c[1]}</td><td>${c[2]?'<span class="badge ok">达标</span>':'<span class="badge risk">未达标</span>'}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+function competitorTrendChart(){
+  const w=740,ht=170,padL=8,padR=100,padT=14,padB=22;
+  const maxV=35;
+  const x=i=>padL+i*((w-padL-padR)/(TREND_MONTHS.length-1));
+  const y=v=>ht-padB-(v/maxV)*(ht-padT-padB);
+  let svg=`<svg viewBox="0 0 ${w} ${ht}" style="width:100%;height:${ht}px;overflow:visible">`;
+  for(let g=0;g<=3;g++){const gy=padT+g*((ht-padT-padB)/3);svg+=`<line x1="${padL}" y1="${gy}" x2="${w-padR}" y2="${gy}" stroke="#F2F3F5" stroke-width="1"/>`;}
+  COMPETITORS.forEach(c=>{
+    const pts=c.trend.map((v,i)=>`${x(i)},${y(v)}`).join(' ');
+    svg+=`<polyline points="${pts}" fill="none" stroke="${c.color}" stroke-width="${c.name.includes('我方')?2.6:1.6}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    c.trend.forEach((v,i)=>svg+=`<circle cx="${x(i)}" cy="${y(v)}" r="2.4" fill="${c.color}"/>`);
+    svg+=`<text x="${w-padR+8}" y="${y(c.trend[c.trend.length-1])+4}" font-size="11" fill="${c.color}" font-weight="600">${c.name.replace('（我方）','')}</text>`;
+  });
+  TREND_MONTHS.forEach((m,i)=>svg+=`<text x="${x(i)}" y="${ht-4}" font-size="10" fill="#86909C" text-anchor="middle">${m}</text>`);
+  svg+='</svg>';
+  return svg;
+}
+function competitorsTab(){
+  const total = COMPETITORS.reduce((s,c)=>s+c.share,0);
+  const bar = `<div style="display:flex;height:28px;border-radius:8px;overflow:hidden;margin-bottom:10px">${COMPETITORS.map(c=>`<div style="width:${c.share/total*100}%;background:${c.color}" title="${c.name} ${c.share}%"></div>`).join('')}</div>`;
+  const legend = COMPETITORS.map(c=>`<div class="field-row" style="padding:7px 0"><span style="display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:${c.name.includes('我方')?'800':'500'}"><i style="width:10px;height:10px;border-radius:3px;background:${c.color};display:inline-block"></i>${c.name}</span><span class="mono" style="font-weight:700">${c.share}%</span></div>`).join('');
+  // 按引擎统计（真实从prompts数据聚合，不是编的数）
+  const engineRows = ENGINE_NAMES.map((name,i)=>{
+    const total2 = prompts.length;
+    const mentioned = prompts.filter(p=>p.hits[i]!=='no').length;
+    const recommended = prompts.filter(p=>p.hits[i]==='rec').length;
+    return {name, mention:Math.round(mentioned/total2*100), rec:Math.round(recommended/total2*100)};
+  });
+  const maxMention = Math.max(...engineRows.map(e=>e.mention),1);
+  const engineTable = engineRows.map(e=>`<div class="field-row" style="padding:8px 0">
+    <div style="min-width:140px;font-size:12.5px;font-weight:600">${e.name}</div>
+    <div style="flex:1;padding:0 12px"><div class="bar"><i style="width:${e.mention/maxMention*100}%;background:var(--teal)"></i></div></div>
+    <div class="tiny mono" style="min-width:120px;text-align:right">被提及${e.mention}% · 推荐${e.rec}%</div>
+  </div>`).join('');
+  return `<div class="sec"><div class="sec-head"><h2>声量份额分布</h2><span class="sub">同一批提问中，各品牌被提及占比</span></div>
+    <div class="card">${bar}${legend}<div class="tiny muted" style="margin-top:10px">基于本期 ${prompts.length} 条监测提问的返回结果统计，"其他/长尾"为未单独命名的品牌合计</div></div></div>
+  <div class="sec"><div class="sec-head"><h2>份额走势</h2><span class="sub">近4个月各品牌声量份额变化</span></div>
+    <div class="card">${competitorTrendChart()}</div></div>
+  <div class="sec"><div class="sec-head"><h2>分引擎表现</h2><span class="sub">按AI引擎拆分品牌提及率与推荐率</span></div>
+    <div class="card">${engineTable}</div></div>`;
+}
+
+function factorCoverageBlock(){
+  const maxV=100;
+  const rows = FACTORS.map((f,i)=>`<div class="field-row" style="padding:10px 0">
+    <div style="min-width:120px;font-size:12px;font-weight:600">${f}</div>
+    <div style="flex:1;padding:0 12px">
+      <div class="bar" style="margin-bottom:4px"><i style="width:${FACTOR_COVERAGE.us[i]}%;background:var(--brand)"></i></div>
+      <div class="bar"><i style="width:${FACTOR_COVERAGE.comp[i]}%;background:var(--inherit-purple)"></i></div>
+    </div>
+    <div class="tiny mono" style="min-width:110px;text-align:right">我方${FACTOR_COVERAGE.us[i]}%<br>竞对${FACTOR_COVERAGE.comp[i]}%</div>
+  </div>`).join('');
+  return `<div class="sec"><div class="sec-head"><h2>决策因子覆盖对比</h2><span class="sub">AI叙事在6个买家决策因子上，提到我方 vs 提到竞对（Flow）的比例（蓝=我方，紫=竞对）</span></div>
+  <div class="card">${rows}</div></div>`;
+}
+function heatmapTabView(){
+  return `<div class="sec"><div class="sec-head"><h2>人设 × ${HEAT_METRIC==='topic'?'主题':'市场'} 热力图</h2><span class="sub">按维度查看品牌提及率数值</span></div><div class="card">${heatmap()}</div></div>`
+  + factorCoverageBlock();
+}
+function sourceMetrics(){
+  const total = SOURCES.length;
+  const mentioned = SOURCES.filter(s=>s.us!=='无提及' && !s.us.includes('竞对')).length;
+  const riskCount = SOURCES.filter(s=>s.risk).length;
+  return `<div class="kpi-row" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi"><div class="lb">监测到的来源总数</div><div class="val">${total}</div></div>
+    <div class="kpi" style="border-color:var(--ok)"><div class="lb">其中我方有被提及</div><div class="val" style="color:var(--ok)">${mentioned}<span style="font-size:14px">/${total}</span></div></div>
+    <div class="kpi" style="border-color:var(--risk)"><div class="lb">高关注来源（无提及）</div><div class="val" style="color:var(--risk)">${riskCount}</div></div>
+  </div>`;
+}
+function sourceChart(){
+  const maxV = Math.max(...SOURCES.map(s=>s.citeCount),1);
+  return SOURCES.slice().sort((a,b)=>b.citeCount-a.citeCount).map(s=>`<div class="field-row" style="padding:8px 0">
+    <div style="min-width:190px;font-size:12px;font-weight:600">${s.dom}</div>
+    <div style="flex:1;padding:0 12px"><div class="bar"><i style="width:${s.citeCount/maxV*100}%;background:${s.risk?'var(--risk)':'var(--brand)'}"></i></div></div>
+    <div class="tiny mono" style="min-width:60px;text-align:right">${s.citeCount}次</div>
+  </div>`).join('');
+}
+function sourcesTabView(){
+  return `<div class="sec"><div class="sec-head"><h2>来源概况</h2><span class="sub">这批来源整体情况</span></div><div class="card">${sourceMetrics()}</div></div>
+  <div class="sec"><div class="sec-head"><h2>被引频次</h2><span class="sub">按估算被引用次数排序（红色=我方无提及）</span></div><div class="card">${sourceChart()}</div></div>
+  <div class="sec"><div class="sec-head"><h2>来源明细</h2><span class="sub">谁在影响行业AI回答</span></div><div class="card">${sourceTable()}</div></div>`;
+}
+function historyTabView(){
+  const rows = AUDITS.map((a,i)=>`<tr style="cursor:pointer" onclick="openAuditDetail(${i})">
+    <td style="font-weight:600">${a.date}</td>
+    <td class="mono">${a.mention}%</td><td class="mono">${a.rec}%</td><td class="mono">${a.cite}%</td><td class="mono" style="font-weight:700;color:var(--teal)">${a.sov}%</td>
+    <td class="tiny muted">n=${a.n}</td>
+    <td><button class="btn sm" onclick="event.stopPropagation();openAuditDetail(${i})">查看 →</button></td>
+  </tr>`).join('');
+  return `<div class="sec"><div class="sec-head"><h2>历史审计报告</h2><span class="sub">按月归档的全景审计快照</span></div>
+  <div class="card"><table class="tbl"><thead><tr><th>审计日期</th><th>品牌提及率</th><th>品牌推荐率</th><th>官网引用率</th><th>声量份额</th><th>样本量</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function openAuditDetail(i){
+  const a = AUDITS[i];
+  openDrawer(`<button class="close" onclick="closeDrawer()">✕</button>
+  <h3>${a.date} 全景审计快照</h3>
+  <div class="tiny muted" style="margin-bottom:16px">样本量 n=${a.n}</div>
+  <div class="kpi-row" style="grid-template-columns:1fr 1fr">
+    <div class="kpi" style="border-color:#4152F655"><div class="lb">品牌提及率</div><div class="val" style="color:#4152F6">${a.mention}%</div></div>
+    <div class="kpi" style="border-color:#722ED155"><div class="lb">品牌推荐率</div><div class="val" style="color:#722ED1">${a.rec}%</div></div>
+    <div class="kpi" style="border-color:#14A9A955"><div class="lb">官网引用率</div><div class="val" style="color:#14A9A9">${a.cite}%</div></div>
+    <div class="kpi" style="border-color:#00B42A55"><div class="lb">声量份额</div><div class="val" style="color:#00B42A">${a.sov}%</div></div>
+  </div>`);
+}
+
+function heatmap(){
+  const confirmedTopics = topics.filter(t=>t.st==='ok');
+  const cols = HEAT_METRIC==='topic'? confirmedTopics.map(t=>t.name) : ['DE','US','JP'];
+  const rows = personas.map(p=>{
+    let arr;
+    if(HEAT_METRIC==='topic'){
+      arr = confirmedTopics.map(t=> t.origIndex==null ? null : (HEAT[p.id]||[])[t.origIndex]);
+    } else {
+      arr = [ (HEAT[p.id]||[0,0,0,0,0])[0], (HEAT[p.id]||[0,0,0,0,0])[1], p.mkt==='JP'?9:null ];
+    }
+    return `<tr><td>${p.name}</td>${arr.map((v,i)=> v==null? `<td><div class="heat-cell" style="background:var(--line-2);color:var(--ink-30)" title="尚无监测数据，下次全景审计生效">—</div></td>` : `<td><div class="heat-cell" style="background:${heatColor(v)};color:${v>50?'#fff':'#141a1a'}" onclick="drillHeat('${p.id}','${esc(cols[i])}')" title="点击筛选提问明细">${v}</div></td>`).join('')}</tr>`;
+  }).join('');
+  return `<div class="seg-sm" style="margin-bottom:14px">
+    <button class="${HEAT_METRIC==='topic'?'on':''}" onclick="setHeatMetric('topic')">按主题</button>
+    <button class="${HEAT_METRIC==='market'?'on':''}" onclick="setHeatMetric('market')">按市场</button>
+  </div>
+  <table class="heat-table"><thead><tr><th>人设 / ${HEAT_METRIC==='topic'?'主题':'市场'}</th>${cols.map(c=>`<th>${c.length>8?c.slice(0,8)+'…':c}</th>`).join('')}</tr></thead>
+  <tbody>${rows}</tbody></table>
+  <div class="tiny muted" style="margin-top:10px">颜色深浅代表品牌提及率，点击格子跳转"提问明细"并按人设筛选；未确认的主题不出现在此处（下方"输入底座"可确认）</div>`;
+}
+function setHeatMetric(m){HEAT_METRIC=m;HEAT_FILTER=null;render();}
+function drillHeat(pid,col){HEAT_FILTER={pid,col};RESULT_TAB='prompts';render();}
+function clearHeatFilter(){HEAT_FILTER=null;render();}
+
+function hitIcon(h){const map={rec:['✓','rec'],men:['·','men'],no:['—','no']};const [t,c]=map[h];return `<span class="hit ${c}">${t}</span>`;}
+function promptsTabView(){
+  let list = prompts;
+  if(HEAT_FILTER){ list = list.filter(p=>p.pid===HEAT_FILTER.pid); }
+  if(INTENT_FILTER!=='全部'){ list = list.filter(p=>p.intent===INTENT_FILTER); }
+  if(ENGINE_FILTER!=null){ list = list.filter(p=>p.hits[ENGINE_FILTER]!=='no'); }
+  const changed = list.filter(p=>p.changed);
+  const rest = list.filter(p=>!p.changed);
+  const shown = SHOW_ALL_PROMPTS? list : changed;
+  const rows = shown.map(p=>`<tr class="${p.changed?'changed':''}" style="cursor:pointer" onclick='openPromptDetail("${esc(p.q)}")'>
+    <td style="max-width:300px"><span style="font-weight:600">${p.q}</span>
+      <div class="tiny muted" style="margin-top:3px">${(personas.find(x=>x.id===p.pid)||{}).name||''} · ${p.mkt} · ${p.intent}</div></td>
+    <td style="white-space:nowrap">${p.hits.map(hitIcon).join('')}</td>
+    <td class="mono">${p.pos}</td>
+    <td class="tiny mono">${p.samples.hits}/${p.samples.runs}</td>
+    <td>${p.tr==='up'?'<span style="color:var(--ok);font-weight:800">↑</span>':p.tr==='new'?'<span class="badge gold">新</span>':'<span class="muted">→</span>'}</td>
+  </tr>`).join('') || `<tr><td colspan="5" class="tiny muted" style="text-align:center;padding:24px 0">没有匹配的提问</td></tr>`;
+  const intentSeg = ['全部',...INTENTS].map(i=>`<button class="${INTENT_FILTER===i?'on':''}" onclick="setIntentFilter('${i}')">${i}</button>`).join('');
+  const engineOpts = ENGINE_NAMES.map((n,i)=>`<option value="${i}" ${ENGINE_FILTER===i?'selected':''}>${n}</option>`).join('');
+  return `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+    <div class="seg-sm">${intentSeg}</div>
+    <select class="inp" style="width:auto" onchange="setEngineFilter(this.value)"><option value="">全部引擎</option>${engineOpts}</select>
+  </div>`
+  + (HEAT_FILTER?`<div class="filter-chip">按人设筛选：${(personas.find(p=>p.id===HEAT_FILTER.pid)||{}).name} × ${HEAT_FILTER.col}<button onclick="clearHeatFilter()">✕</button></div>`:'')
+  + `<table class="tbl"><thead><tr><th style="min-width:280px">提问</th><th>引擎命中</th><th>位次</th><th>采样命中</th><th>趋势</th></tr></thead><tbody>${rows}</tbody></table>
+  ${!SHOW_ALL_PROMPTS && rest.length ? `<div style="margin-top:12px"><button class="btn sm" onclick="showAllPrompts()">显示全部 ${list.length} 条（含 ${rest.length} 条本期无变化）</button></div>`:''}
+  <div class="tiny muted" style="margin-top:12px"><span class="hit rec">✓</span>推荐&nbsp;&nbsp;<span class="hit men">·</span>仅提及&nbsp;&nbsp;<span class="hit no">—</span>未命中　·　"采样命中"=本期该提问实际返回次数中命中我方的比例</div>`;
+}
+function setIntentFilter(v){INTENT_FILTER=v; render();}
+function setEngineFilter(v){ENGINE_FILTER = v===''? null : Number(v); render();}
+function showAllPrompts(){SHOW_ALL_PROMPTS=true;render();}
+function openPromptDetail(q){
+  const p = prompts.find(x=>x.q===q); if(!p) return;
+  const blocks = ENGINE_NAMES.map((name,i)=>{
+    const h=p.hits[i];
+    const label = h==='rec'?'推荐':h==='men'?'仅提及':'未命中';
+    const opac = h==='no' ? 'opacity:.55' : '';
+    return `<div class="answer-block" style="${opac}"><b>${name}</b> · ${label}</div>`;
+  }).join('');
+  const histMax = Math.max(...p.hist, p.samples.runs, 1);
+  const histLabels = ['W-3','W-2','W-1','本期'];
+  const histBars = p.hist.map((v,i)=>`<div style="text-align:center;flex:1">
+    <div style="height:60px;display:flex;align-items:flex-end;justify-content:center"><div style="width:60%;height:${v/histMax*100}%;background:${i===p.hist.length-1?'var(--brand)':'var(--line-2)'};border-radius:4px 4px 0 0"></div></div>
+    <div class="tiny muted" style="margin-top:4px">${histLabels[i]}</div>
+    <div class="tiny mono" style="font-weight:700">${v}</div>
+  </div>`).join('');
+  openDrawer(`<button class="close" onclick="closeDrawer()">✕</button>
+  <h3>提问详情</h3>
+  <div class="tiny muted" style="margin-bottom:16px">${(personas.find(x=>x.id===p.pid)||{}).name} · ${p.mkt} · ${p.intent}</div>
+  <div class="card" style="padding:14px 16px;box-shadow:none"><span style="font-weight:700;font-size:13px">${p.q}</span></div>
+  <div class="tiny muted" style="margin-top:12px">本期采样 ${p.samples.runs} 次，命中我方 ${p.samples.hits} 次</div>
+  <div class="sec-head" style="margin-top:20px"><h2>历史采样记录</h2><span class="sub">每期命中我方的次数</span></div>
+  <div class="card" style="display:flex;gap:6px;box-shadow:none">${histBars}</div>
+  <div class="sec-head" style="margin-top:20px"><h2>按引擎命中情况</h2></div>
+  ${blocks}
+  <div class="tiny muted" style="margin-top:16px">这些发现会在诊断与策略中给出具体处理建议</div>`);
+}
+
+function sourceTable(){
+  return `<table class="tbl"><thead><tr><th>来源域名</th><th>覆盖主题</th><th>被引频次</th><th>我方提及</th></tr></thead><tbody>
+  ${SOURCES.map(s=>`<tr><td><span style="font-weight:700">${s.dom}</span></td><td class="tiny">${s.cover}</td><td class="tiny">${s.cited}</td>
+    <td>${s.risk?`<span class="badge risk">${s.us}</span>`:`<span class="badge grey">${s.us}</span>`}</td></tr>`).join('')}
+  </tbody></table>
+  <div class="tiny muted" style="margin-top:12px">这里只呈现"AI在引用谁"，为什么我方缺席、该怎么做在<button class="linkbtn" onclick="toast('（演示）跳转至诊断与策略')">诊断与策略</button>中给出</div>`;
+}
+
+function resultView(){
+  const tabFn = {overview:overviewTab, competitors:competitorsTab, prompts:promptsTabView, heatmap:heatmapTabView, sampling:samplingTab, sources:sourcesTabView, history:historyTabView}[RESULT_TAB] || overviewTab;
+  const body = RESULT_TAB==='prompts' ? `<div class="sec"><div class="sec-head"><h2>提问明细</h2><span class="sub">默认只显示本期有变化的提问，可按意图/引擎筛选</span></div><div class="card">${tabFn()}</div></div>` : tabFn();
+  return credBar() + subtabNav() + body;
+}
+
+/* ============ 配置视图 ============ */
+function configView(){
+  return `<div class="demo-toggle">演示切换（实际由是否已有监测数据自动判定）：
+    <button class="btn sm ${CFG_MODE==='first'?'primary':''}" onclick="setCfgMode('first')" style="margin-left:6px">新工作区 · 首次引导</button>
+    <button class="btn sm ${CFG_MODE==='edit'?'primary':''}" onclick="setCfgMode('edit')">已配置 · 自由编辑</button></div>`
+  + (CFG_MODE==='first'? wizardView() : editView());
+}
+function setCfgMode(m){CFG_MODE=m;WIZ_STEP=1;WIZ_SAMPLING=false;render();}
+
+const WIZ_TITLES=['输入底座','买家人设','提问库','监测计划'];
+function wizValid(step){
+  if(step===1) return !!(BRAND.name && BRAND.productLines.length && BRAND.market);
+  if(step===2) return personas.some(p=>p.st==='ok');
+  if(step===3) return promptLib.some(p=>p.st==='ok');
+  return true;
+}
+function wizardView(){
+  if(WIZ_SAMPLING){
+    return `<div class="wizard"><div class="card progress-wrap"><div class="spin"></div>
+      <div style="font-size:15px;font-weight:800">首次采样进行中</div>
+      <div class="tiny muted" style="margin-top:8px">预计 20–40 分钟，关闭页面不影响进度，完成后在概览查看提醒</div>
+      <button class="btn sm" style="margin-top:20px" onclick="finishSampling()">（演示）立即查看结果</button>
+    </div></div>`;
+  }
+  const stepsBar = `<div class="steps-bar">${WIZ_TITLES.map((t,i)=>{
+    const n=i+1, st = n<WIZ_STEP?'done':n===WIZ_STEP?'now':'';
+    return `<div class="s ${st}"><div class="circ">${n<WIZ_STEP?'✓':n}</div><div class="lb">${t}</div></div>${i<3?`<div class="rule ${n<WIZ_STEP?'done':''}"></div>`:''}`;
+  }).join('')}</div>`;
+
+  let body='';
+  if(WIZ_STEP===1){
+    body = `<h3>确认输入底座</h3><div class="desc">已从企业知识库继承、官网扫描预填，请确认或编辑</div>
+    ${brandSummary()}
+    <div class="tiny muted" style="margin-top:16px">品牌、产品线、目标市场为必填；竞对、事实、主题可留空或待确认，之后在监测配置中补充</div>`;
+  } else if(WIZ_STEP===2){
+    body = `<h3>确认买家人设</h3><div class="desc">AI基于输入底座生成的人设，至少确认1个才能继续</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${personas.map(personaCard).join('')}</div>
+    <div style="margin-top:14px"><button class="btn sm" onclick="openAddPersonaModal()">＋ 新增人设</button></div>`;
+  } else if(WIZ_STEP===3){
+    body = `<h3>确认提问库</h3><div class="desc">按人设与主题生成，证据不足2项的默认不勾选</div>
+    <table class="tbl"><thead><tr><th style="width:24px"></th><th>提问</th><th>证据</th><th>状态</th></tr></thead><tbody>
+    ${promptLib.map((p,i)=>`<tr><td><span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePromptLib(${i})">${p.st==='ok'?'✓':''}</span></td><td style="font-weight:600">${p.q}</td>
+      <td class="mono">${p.ev}/4</td><td>${p.st==='ok'?'<span class="badge ok">已入库</span>':'<span class="badge gold">待确认</span>'}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:14px"><button class="btn sm" onclick="openAddPromptModal()">＋ 手动新增</button></div>`;
+  } else if(WIZ_STEP===4){
+    const cnt = promptLib.filter(p=>p.st==='ok').length;
+    body = `<h3>确认监测计划</h3><div class="desc">本次将执行的监测范围，由套餐档位决定上限</div>
+    <div class="field-row"><div class="k">监测提问</div><div class="v">${cnt} 条（当前已确认数）</div></div>
+    <div class="field-row"><div class="k">AI引擎</div><div class="v">Google 系 3 引擎（入门版）</div></div>
+    <div class="field-row"><div class="k">监测频率</div><div class="v">每周，哨兵快照每日</div></div>
+    <div class="field-row"><div class="k">首次全景审计</div><div class="v">确认后立即启动</div></div>`;
+  }
+
+  const valid = wizValid(WIZ_STEP);
+  const warnMap={1:'品牌/产品线/目标市场不能为空',2:'至少确认1个人设才能继续',3:'至少确认1条提问才能继续'};
+  return `<div class="wizard">${stepsBar}<div class="card wizcard">${body}
+    <div class="wiz-foot">
+      <button class="btn" ${WIZ_STEP===1?'disabled':''} onclick="wizBack()">上一步</button>
+      ${!valid?`<span class="wiz-warn">${warnMap[WIZ_STEP]}</span>`:''}
+      <button class="btn primary" ${!valid?'disabled':''} onclick="wizNext()">${WIZ_STEP<4?'下一步':'确认并启动首次监测'}</button>
+    </div></div></div>`;
+}
+function srcBadge(src){
+  const cls = src.includes('继承') ? 'inherit' : 'grey';
+  return `<span class="badge ${cls}">${src}</span>`;
+}
+function brandSummary(){
+  const pendingComp = BRAND.competitors.filter(c=>c.st==='pending').length;
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:12px">
+      <div class="tiny muted">品牌/产品线/市场/竞对/事实继承自知识库与官网扫描，AI也会建议新增项；点右侧按钮统一编辑所有字段</div>
+      <button class="btn sm primary" onclick="openBrandEditModal()" style="flex-shrink:0">编辑输入底座</button>
+    </div>
+    <div class="field-row"><div class="k">品牌与别名</div><div class="v">${BRAND.name}<div class="src" style="margin-top:6px">${srcBadge(BRAND.nameSrc)} <span class="tiny muted">置信度${BRAND.nameConf}%</span></div></div></div>
+    <div class="field-row"><div class="k">产品线</div><div class="v">${BRAND.productLines.map(p=>p.name).join(' · ')}<div class="src" style="margin-top:6px">${srcBadge(BRAND.plSrc)} <span class="tiny muted">置信度${BRAND.plConf}%</span></div></div></div>
+    <div class="field-row"><div class="k">目标市场×语言</div><div class="v">${BRAND.market}<div class="src" style="margin-top:6px">${srcBadge(BRAND.mktSrc)} <span class="tiny muted">置信度${BRAND.mktConf}%</span></div></div></div>
+    <div class="field-row"><div class="k">竞争对手</div><div class="v">${BRAND.competitors.map(c=>c.name+(c.st==='pending'?'（待确认）':'')).join(' · ')}<div class="src" style="margin-top:6px">${srcBadge(BRAND.compSrc)} <span class="tiny muted">置信度${BRAND.compConf}%</span>${pendingComp?` <span class="badge gold">${pendingComp}项待确认</span>`:''}</div></div></div>
+    <div class="field-row"><div class="k">可对外事实</div><div class="v">${BRAND.facts.map(f=>f.text).join(' · ')}<div class="src" style="margin-top:6px">${srcBadge(BRAND.factSrc)} <span class="tiny muted">置信度${BRAND.factConf}%</span></div></div></div>
+    ${topicsBlock()}
+  </div>`;
+}
+let brandDraft = null;
+function openBrandEditModal(){ brandDraft = JSON.parse(JSON.stringify(BRAND)); renderBrandModal(); }
+function renderBrandModal(){
+  openModal(`<div class="modal-box">
+    <div class="modal-head"><button class="close" onclick="closeModal()">✕</button><div><h3>编辑输入底座</h3><p>品牌 / 产品线 / 市场 / 竞对 / 事实一起维护，保存后统一生效</p></div></div>
+    <div class="modal-body">
+      <div class="mfield"><label>品牌与别名</label><input class="inp" id="bd-name" value="${brandDraft.name.replace(/"/g,'&quot;')}"></div>
+      <div class="mfield"><label>产品线</label>
+        <div class="chiplist">${brandDraft.productLines.map((p,i)=>`<span class="chip-item">${p.name}<button onclick="bdRemove('productLines',${i})">✕</button></span>`).join('')||'<span class="tiny muted">暂无</span>'}</div>
+        <div class="chip-add"><input class="inp" id="bd-pl-new" placeholder="新增产品线"><button class="btn sm" onclick="bdAdd('productLines')">添加</button></div>
+      </div>
+      <div class="mfield"><label>目标市场 × 语言</label><input class="inp" id="bd-market" value="${brandDraft.market.replace(/"/g,'&quot;')}"></div>
+      <div class="mfield"><label>竞争对手</label>
+        <div class="chiplist">${brandDraft.competitors.map((c,i)=>`<span class="chip-item ${c.st==='pending'?'pending':''}">${c.name}${c.st==='pending'?' · AI识别，待确认':''}${c.st==='pending'?`<button class="ok" onclick="bdConfirmComp(${i})" title="确认加入">✓</button>`:''}<button onclick="bdRemove('competitors',${i})">✕</button></span>`).join('')||'<span class="tiny muted">暂无</span>'}</div>
+        <div class="chip-add"><input class="inp" id="bd-comp-new" placeholder="新增竞争对手"><button class="btn sm" onclick="bdAdd('competitors')">添加</button></div>
+        <div class="meta">AI识别的新竞对会先标"待确认"，点✓采纳后才计入声量份额分母</div>
+      </div>
+      <div class="mfield"><label>可对外事实（判定基准）</label>
+        <div class="chiplist">${brandDraft.facts.map((f,i)=>`<span class="chip-item">${f.text}<button onclick="bdRemove('facts',${i})">✕</button></span>`).join('')||'<span class="tiny muted">暂无</span>'}</div>
+        <div class="chip-add"><input class="inp" id="bd-fact-new" placeholder="新增事实，如 精度±0.05mm"><button class="btn sm" onclick="bdAdd('facts')">添加</button></div>
+        <div class="meta">此处内容是"讲对了吗"事实错误判定的唯一依据</div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="bdReviewSave()">保存</button></div>
+  </div>`);
+}
+function bdRemove(key,i){ brandDraft[key].splice(i,1); renderBrandModal(); }
+function bdAdd(key){
+  const map={productLines:'bd-pl-new', competitors:'bd-comp-new', facts:'bd-fact-new'};
+  const el=document.getElementById(map[key]); const val=el.value.trim(); if(!val) return;
+  if(key==='facts') brandDraft.facts.push({text:val});
+  else if(key==='competitors') brandDraft.competitors.push({name:val, st:'ok'});
+  else brandDraft.productLines.push({name:val});
+  renderBrandModal();
+}
+function bdConfirmComp(i){ brandDraft.competitors[i].st='ok'; renderBrandModal(); }
+function bdReviewSave(){
+  brandDraft.name = document.getElementById('bd-name').value.trim() || brandDraft.name;
+  brandDraft.market = document.getElementById('bd-market').value.trim() || brandDraft.market;
+  const changes=[];
+  if(brandDraft.name!==BRAND.name) changes.push('品牌与别名');
+  if(brandDraft.market!==BRAND.market) changes.push('目标市场×语言');
+  if(JSON.stringify(brandDraft.productLines)!==JSON.stringify(BRAND.productLines)) changes.push('产品线');
+  if(JSON.stringify(brandDraft.competitors)!==JSON.stringify(BRAND.competitors)) changes.push('竞争对手');
+  if(JSON.stringify(brandDraft.facts)!==JSON.stringify(BRAND.facts)) changes.push('可对外事实');
+  openConfirmSaveModal(changes);
+}
+function openConfirmSaveModal(changes){
+  const hasSensitive = changes.includes('品牌与别名')||changes.includes('竞争对手');
+  openModal(`<div class="modal-box" style="width:440px">
+    <div class="modal-head"><button class="close" onclick="renderBrandModal()">✕</button><h3>确认保存</h3></div>
+    <div class="modal-body">
+      ${changes.length? `<div class="tiny" style="margin-bottom:10px;font-weight:700">改动字段：${changes.join('、')}</div>`:'<div class="tiny muted" style="margin-bottom:10px">本次没有实际改动</div>'}
+      <div class="tiny muted">保存后将同步推送到官网知识库，AI官网建站资产与GEO智能体共用同一份品牌事实。${hasSensitive?'品牌名/竞对名单变更会导致下游相关提问与历史基线重新计算，历史数据将不可直接比较。':''}</div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="renderBrandModal()">返回修改</button><button class="btn primary" onclick="bdCommit()">确认保存</button></div>
+  </div>`);
+}
+function bdCommit(){
+  BRAND = brandDraft; brandDraft=null; closeModal(); render();
+  toast('已保存，已同步推送到官网知识库');
+}
+function personaCard(p){
+  return `<div class="persona-card ${p.st==='pending'?'pending':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <h4>${p.name}</h4>
+      <span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePersona('${p.id}')">${p.st==='ok'?'✓':''}</span>
+    </div>
+    <div class="role">${p.mkt} 市场${p.st==='pending'?' · AI生成，待确认':''}</div>
+    <button class="btn sm" onclick="openEditPersonaModal('${p.id}')">编辑</button>
+  </div>`;
+}
+function togglePersona(id){const p=personas.find(x=>x.id===id); p.st = p.st==='ok'?'pending':'ok'; render();}
+function openEditPersonaModal(id){
+  const p=personas.find(x=>x.id===id);
+  openModal(`<div class="modal-box" style="width:420px">
+    <div class="modal-head"><button class="close" onclick="closeModal()">✕</button><h3>编辑人设</h3></div>
+    <div class="modal-body">
+      <div class="mfield"><label>人设名称</label><input class="inp" id="ep-name" value="${p.name.replace(/"/g,'&quot;')}"></div>
+      <div class="mfield"><label>对应市场</label><input class="inp" id="ep-mkt" value="${p.mkt}"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitEditPersona('${id}')">保存</button></div>
+  </div>`);
+}
+function submitEditPersona(id){
+  const p=personas.find(x=>x.id===id);
+  const name=document.getElementById('ep-name').value.trim();
+  const mkt=document.getElementById('ep-mkt').value.trim().toUpperCase();
+  if(!name){ toast('人设名称不能为空'); return; }
+  p.name=name; if(mkt) p.mkt=mkt;
+  closeModal(); render(); toast('已更新人设');
+}
+function openAddPersonaModal(){
+  openModal(`<div class="modal-box" style="width:420px">
+    <div class="modal-head"><button class="close" onclick="closeModal()">✕</button><h3>新增人设</h3></div>
+    <div class="modal-body">
+      <div class="mfield"><label>人设名称</label><input class="inp" id="np-name" placeholder="例如：德国采购经理"></div>
+      <div class="mfield"><label>对应市场</label><input class="inp" id="np-mkt" placeholder="DE / US / JP" value="US"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitAddPersona()">新增</button></div>
+  </div>`);
+}
+function submitAddPersona(){
+  const name=document.getElementById('np-name').value.trim();
+  const mkt=(document.getElementById('np-mkt').value.trim()||'US').toUpperCase();
+  if(!name){ toast('请填写人设名称'); return; }
+  personas.push({id:'p'+Date.now(), name, mkt, st:'pending'});
+  closeModal(); render(); toast('已新增人设，待确认');
+}
+function topicsBlock(){
+  return `<div class="field-row"><div class="k">主题（品类话题）</div>
+    <div class="v">${topics.map(t=>`<span class="topic-chip ${t.st==='pending'?'pending':''}" onclick="toggleTopic('${t.id}')" title="${t.st==='pending'?'AI新识别，点击确认':'点击可取消确认'}">${t.name}${t.st==='pending'?' · 待确认':''} <span class="x">${t.st==='pending'?'✓':'✕'}</span></span>`).join(' ')}
+      <div class="src" style="margin-top:8px"><span class="badge grey">AI识别（产品线×人设决策因子生成）</span></div>
+    </div>
+    <div><button class="btn sm" onclick="openAddTopicModal()">＋ 新增主题</button></div>
+  </div>`;
+}
+function toggleTopic(id){ const t=topics.find(x=>x.id===id); t.st = t.st==='ok'?'pending':'ok'; render(); toast(t.st==='ok'?'已确认主题「'+t.name+'」，下次全景审计纳入热力图':'已取消确认，暂不进入热力图'); }
+function openAddTopicModal(){
+  openModal(`<div class="modal-box" style="width:400px">
+    <div class="modal-head"><button class="close" onclick="closeModal()">✕</button><h3>新增主题</h3></div>
+    <div class="modal-body"><div class="mfield"><label>主题名称（品类话题）</label><input class="inp" id="nt-name" placeholder="例如：陶瓷材料切割"></div></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitAddTopic()">新增</button></div>
+  </div>`);
+}
+function submitAddTopic(){
+  const val=document.getElementById('nt-name').value.trim(); if(!val){ toast('请填写主题名称'); return; }
+  topics.push({id:'t'+Date.now(), name:val, st:'pending', origIndex:null});
+  closeModal(); render(); toast('已新增主题，待确认，确认后下次全景审计生效');
+}
+function togglePromptLib(i){ const p=promptLib[i]; p.st = p.st==='ok'?'pending':'ok'; render(); }
+function openAddPromptModal(){
+  const opts = personas.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  openModal(`<div class="modal-box" style="width:460px">
+    <div class="modal-head"><button class="close" onclick="closeModal()">✕</button><h3>手动新增提问</h3></div>
+    <div class="modal-body">
+      <div class="mfield"><label>所属人设</label><select class="inp" id="npq-pid">${opts}</select></div>
+      <div class="mfield"><label>提问内容</label><input class="inp" id="npq-q" placeholder="输入完整提问原文"></div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" onclick="submitAddPrompt()">新增</button></div>
+  </div>`);
+}
+function submitAddPrompt(){
+  const q=document.getElementById('npq-q').value.trim(); const pid=document.getElementById('npq-pid').value;
+  if(!q){ toast('请填写提问内容'); return; }
+  promptLib.push({q, pid, ev:1, st:'pending'});
+  closeModal(); render(); toast('已新增提问，证据不足2项，需手动确认');
+}
+
+function wizNext(){ if(!wizValid(WIZ_STEP)) return; if(WIZ_STEP<4){WIZ_STEP++;render();} else {WIZ_SAMPLING=true;render();} }
+function wizBack(){ if(WIZ_STEP>1){WIZ_STEP--;render();} }
+function finishSampling(){ WIZ_SAMPLING=false; CFG_MODE='edit'; VIEW='result'; render(); toast('首次监测完成，已生成监测结果'); }
+
+function editView(){
+  const pendingInputs = BRAND.competitors.filter(c=>c.st==='pending').length + topics.filter(t=>t.st==='pending').length;
+  const pendingPersonas = personas.filter(p=>p.st==='pending').length;
+  const pendingPrompts = promptLib.filter(p=>p.st==='pending').length;
+  const pendingCount = pendingInputs+pendingPersonas+pendingPrompts;
+  const parts=[];
+  if(pendingInputs) parts.push(pendingInputs+'项输入/主题');
+  if(pendingPersonas) parts.push(pendingPersonas+'个人设');
+  if(pendingPrompts) parts.push(pendingPrompts+'条提问');
+  const pendingStrip = pendingCount? `<div class="pending-strip">
+    <span style="flex:1"><b>${pendingCount} 项待确认</b> — ${parts.join('、')}</span>
+    <button class="btn sm primary" onclick="jumpFirstPending()">逐项处理</button></div>` : '';
+
+  const tabs = `<div class="seg-sm" style="margin-bottom:18px">
+    <button class="${CFG_TAB==='inputs'?'on':''}" onclick="setCfgTab('inputs')">输入底座${pendingInputs?` (${pendingInputs})`:''}</button>
+    <button class="${CFG_TAB==='personas'?'on':''}" onclick="setCfgTab('personas')">买家人设${pendingPersonas?` (${pendingPersonas})`:''}</button>
+    <button class="${CFG_TAB==='prompts'?'on':''}" onclick="setCfgTab('prompts')">提问库${pendingPrompts?` (${pendingPrompts})`:''}</button>
+  </div>`;
+
+  let body='';
+  if(CFG_TAB==='inputs'){
+    body = brandSummary();
+  } else if(CFG_TAB==='personas'){
+    body = `<div class="card"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${personas.map(personaCard).join('')}</div>
+    <div style="margin-top:14px"><button class="btn sm" onclick="openAddPersonaModal()">＋ AI生成新人设</button></div></div>`;
+  } else {
+    body = `<div class="card"><table class="tbl"><thead><tr><th style="width:24px"></th><th>提问</th><th>人设</th><th>证据</th><th>状态</th></tr></thead><tbody>
+    ${promptLib.map((p,i)=>`<tr class="${p.st==='pending'?'changed':''}"><td><span class="checkbox ${p.st==='ok'?'on':''}" onclick="togglePromptLib(${i})">${p.st==='ok'?'✓':''}</span></td><td style="font-weight:600">${p.q}</td><td class="tiny">${(personas.find(x=>x.id===p.pid)||{}).name||''}</td>
+      <td class="mono">${p.ev}/4</td><td>${p.st==='ok'?'<span class="badge ok">已入库</span>':'<span class="badge gold">待确认</span>'}</td></tr>`).join('')}
+    </tbody></table>
+    <div style="margin-top:14px"><button class="btn sm" onclick="openAddPromptModal()">＋ 手动新增</button></div></div>`;
+  }
+  return pendingStrip + tabs + body;
+}
+function setCfgTab(t){CFG_TAB=t;render();}
+function jumpFirstPending(){
+  if(BRAND.competitors.some(c=>c.st==='pending') || topics.some(t=>t.st==='pending')){ setCfgTab('inputs'); if(BRAND.competitors.some(c=>c.st==='pending')) openBrandEditModal(); }
+  else if(personas.some(p=>p.st==='pending')) setCfgTab('personas');
+  else setCfgTab('prompts');
+}
+
+/* ============ 概览（工作台） ============ */
+function overviewModule(){
+  return `<div class="pagehead"><div><h1>概览</h1><div class="desc">三件事：指标有没有提升、GEO智能体做了什么、现在有哪些事情需要你确认</div></div></div>`
+  + overviewMetricsBlock()
+  + overviewWorkBlock()
+  + overviewPendingBlock();
+}
+function overviewMetricsBlock(){
+  const cards = KPIS.map(k=>`<div class="kpi" style="border-color:${k.hex}55">
+    <div class="lb">${k.zh}</div>
+    <div class="val" style="color:${k.hex}">${k.v}<span style="font-size:14px">%</span><span class="delta ${k.v>=k.prev?'up':'down'}">${pt(k.v,k.prev)}</span></div>
+  </div>`).join('');
+  return `<div class="sec"><div class="sec-head"><h2>① 指标有没有提升</h2><span class="sub">四项主指标，较上次采样的变化</span></div>
+  <div class="card"><div class="kpi-row">${cards}</div>
+  <div style="margin-top:14px;text-align:right"><button class="btn sm" onclick="setModule('track')">查看完整监测数据 →</button></div></div></div>`;
+}
+function overviewWorkBlock(){
+  const card = w=>`<div class="workcard">
+    <div class="workcard-top">
+      <div class="workcard-tags"><span class="badge teal">${w.kind}</span></div>
+      <span class="tiny muted">${w.time}</span>
+    </div>
+    <div class="wtitle">${w.title}</div>
+    <div class="wtrack">
+      <div class="wt-node"><span class="wt-dot"></span><div><div class="wt-who">GEO 智能体</div><div class="wt-note">${w.body}</div></div></div>
+      ${w.reviewed?`<div class="wt-node"><span class="wt-dot ops"></span><div><div class="wt-who">运营顾问<span class="tag">已复核</span></div><div class="wt-note">已核对结论与依据，可直接采用</div></div></div>`:''}
+    </div>
+  </div>`;
+  return `<div class="sec"><div class="sec-head"><h2>② GEO智能体做了什么</h2><span class="sub">近期工作记录，按时间倒序</span></div>
+  ${OVERVIEW_WORK.map(card).join('')}</div>`;
+}
+function overviewPendingBlock(){
+  const items = [];
+  const compPending = BRAND.competitors.filter(c=>c.st==='pending');
+  if(compPending.length) items.push({t:`${compPending.length}个AI新识别的竞争对手待确认`, d:compPending.map(c=>c.name).join('、'), go:()=>{ setModule('track'); VIEW='config'; CFG_MODE='edit'; CFG_TAB='inputs'; render(); openBrandEditModal(); }});
+  const topicPending = topics.filter(t=>t.st==='pending');
+  if(topicPending.length) items.push({t:`${topicPending.length}个AI新识别的主题待确认`, d:topicPending.map(t=>t.name).join('、'), go:()=>{ setModule('track'); VIEW='config'; CFG_MODE='edit'; CFG_TAB='inputs'; render(); }});
+  const personaPending = personas.filter(p=>p.st==='pending');
+  if(personaPending.length) items.push({t:`${personaPending.length}个新识别的人设待确认`, d:personaPending.map(p=>p.name).join('、'), go:()=>{ setModule('track'); VIEW='config'; CFG_MODE='edit'; CFG_TAB='personas'; render(); }});
+  const promptPending = promptLib.filter(p=>p.st==='pending');
+  if(promptPending.length) items.push({t:`${promptPending.length}条低证据提问待确认`, d:promptPending.map(p=>p.q).join('；').slice(0,60)+'…', go:()=>{ setModule('track'); VIEW='config'; CFG_MODE='edit'; CFG_TAB='prompts'; render(); }});
+  window._pendGo = items.map(i=>i.go);
+  return `<div class="sec"><div class="sec-head"><h2>③ 需要你确认</h2><span class="sub">${items.length?`共 ${items.length} 项`:'当前没有待确认事项'}</span></div>
+  ${items.map((it,i)=>`<div class="pend-card"><div><div class="t">${it.t}</div><div class="d">${it.d}</div></div><button class="btn sm primary" onclick="window._pendGo[${i}]()">去处理 →</button></div>`).join('') || `<div class="card tiny muted" style="text-align:center;padding:24px">暂无待确认事项</div>`}
+  </div>`;
+}
+
+/* ============ 报告与设置 ============ */
+let REPORT_TAB='center';
+function reportModule(){
+  return `<div class="pagehead"><div><h1>报告与设置</h1><div class="desc">正式报告归档，以及监测引擎/口径/额度/权限的账户级设置</div></div>
+    <div class="seg"><button class="${REPORT_TAB==='center'?'on':''}" onclick="setReportTab('center')">报告中心</button><button class="${REPORT_TAB==='settings'?'on':''}" onclick="setReportTab('settings')">设置</button></div></div>`
+  + (REPORT_TAB==='center'? reportCenterView() : reportSettingsView());
+}
+function setReportTab(t){REPORT_TAB=t;render();}
+function reportCenterView(){
+  const card = (a,i)=>`<div class="workcard">
+    <div class="workcard-top">
+      <div><div class="workcard-tags"><span class="badge teal">${i===0?'本期':'历史'}</span></div><div class="wtitle">${a.date} 可见性审计报告</div></div>
+      <span class="badge ok">已生成</span>
+    </div>
+    <div class="tiny muted" style="margin-top:8px">品牌提及率${a.mention}% · 品牌推荐率${a.rec}% · 官网引用率${a.cite}% · 声量份额${a.sov}% · 样本量n=${a.n}</div>
+    <div class="wact" style="margin-top:10px"><button class="btn sm" onclick="openAuditDetail(${i})">查看详情</button><button class="btn sm" onclick="toast('（演示）下载PDF——实际导出超出本原型范围')">下载PDF</button><button class="btn sm" onclick="toast('（演示）已复制分享链接')">分享</button></div>
+  </div>`;
+  return `<div class="sec"><div class="sec-head"><h2>可见性审计报告</h2><span class="sub">按月归档，可下载或分享给团队</span></div>
+  ${AUDITS.map(card).join('')}</div>`;
+}
+function reportSettingsView(){
+  const engineRows = Object.keys(ENGINES_ENABLED).map(name=>`<div class="field-row"><div class="k">${name}</div><div class="v"></div>
+    <span class="switch ${ENGINES_ENABLED[name]?'on':''}" onclick="toggleEngine('${name}')"><span class="knob"></span></span></div>`).join('');
+  return `<div class="sec"><div class="sec-head"><h2>引擎</h2><span class="sub">开启后纳入采样，关闭的引擎不产生数据也不计费</span></div>
+    <div class="card">${engineRows}</div></div>
+  <div class="sec"><div class="sec-head"><h2>采集口径</h2><span class="sub">全景审计与哨兵快照的执行频率</span></div>
+    <div class="card">
+      <div class="field-row"><div class="k">全景审计频率</div><div class="v"><select class="inp" style="max-width:180px" onchange="setFreq('audit',this.value)"><option ${COLLECT_FREQ.audit==='每月1次'?'selected':''}>每月1次</option><option ${COLLECT_FREQ.audit==='每两周1次'?'selected':''}>每两周1次</option></select></div></div>
+      <div class="field-row"><div class="k">哨兵快照频率</div><div class="v"><select class="inp" style="max-width:180px" onchange="setFreq('sentinel',this.value)"><option ${COLLECT_FREQ.sentinel==='每日1次'?'selected':''}>每日1次</option><option ${COLLECT_FREQ.sentinel==='不启用'?'selected':''}>不启用</option></select></div></div>
+      <div class="tiny muted" style="margin-top:8px">完整采样规则说明见「可见性监测 › 采样与可信度」</div>
+    </div></div>
+  <div class="sec"><div class="sec-head"><h2>市场 / 竞对 / 提示词</h2><span class="sub">数据本体在监测配置里维护，这里只做摘要</span></div>
+    <div class="card">
+      <div class="field-row"><div class="k">目标市场</div><div class="v">${BRAND.market}</div><button class="btn sm" onclick="setModule('track');VIEW='config';CFG_MODE='edit';CFG_TAB='inputs';render()">管理 →</button></div>
+      <div class="field-row"><div class="k">竞争对手</div><div class="v">${BRAND.competitors.map(c=>c.name).join(' · ')}</div><button class="btn sm" onclick="setModule('track');VIEW='config';CFG_MODE='edit';CFG_TAB='inputs';render()">管理 →</button></div>
+      <div class="field-row"><div class="k">监测提问</div><div class="v">${promptLib.length} 条</div><button class="btn sm" onclick="setModule('track');VIEW='config';CFG_MODE='edit';CFG_TAB='prompts';render()">管理 →</button></div>
+    </div></div>
+  <div class="sec"><div class="sec-head"><h2>用量与套餐</h2></div>
+    <div class="card"><div class="field-row"><div class="k">当前套餐</div><div class="v"><span class="badge teal">${QUOTA.tier}</span></div><button class="btn sm primary" onclick="toast('（演示）跳转升级套餐页')">升级套餐</button></div>
+      <div style="margin-top:4px"><div class="tiny">${QUOTA.used} / ${QUOTA.total} ${QUOTA.unit}</div><div class="quota-bar"><i style="width:${QUOTA.used/QUOTA.total*100}%"></i></div><div class="tiny muted" style="margin-top:6px">${QUOTA.renew}</div></div>
+    </div></div>
+  <div class="sec"><div class="sec-head"><h2>权限与按钮控制</h2><span class="sub">不同套餐能看到/点到哪些功能</span></div>
+    <div class="card"><table class="tbl perm"><thead><tr><th>功能</th>${TIERS.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>
+    ${PERMISSION_MATRIX.map(row=>`<tr><td>${row[0]}</td>${row.slice(1).map(v=>`<td class="tiny">${v}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function toggleEngine(name){ ENGINES_ENABLED[name]=!ENGINES_ENABLED[name]; render(); toast((ENGINES_ENABLED[name]?'已开启 ':'已关闭 ')+name); }
+function setFreq(k,v){ COLLECT_FREQ[k]=v; render(); toast('已更新'+(k==='audit'?'全景审计':'哨兵快照')+'频率为'+v); }
+
+function setView(v){VIEW=v;render();}
+const NAV_ITEMS = [['overview','概览'],['track','可见性监测'],['diag','诊断与策略'],['studio','优化中心'],['report','报告与设置']];
+function setModule(m){
+  if(m==='diag'||m==='studio'){ toast('该模块尚未设计（演示范围外）'); return; }
+  MODULE=m; render();
+}
+function renderNavSub(){
+  document.getElementById('navSub').innerHTML = NAV_ITEMS.map(([id,label])=>
+    `<div class="s-item ${MODULE===id?'on':''}" onclick="setModule('${id}')">${label}</div>`).join('');
+  document.getElementById('crumb').textContent = 'GEO 智能体 / ' + (NAV_ITEMS.find(n=>n[0]===MODULE)||[,''])[1];
+}
+function trackModule(){
+  return pageHead() + (VIEW==='result'? resultView() : configView());
+}
+function render(){
+  renderNavSub();
+  const fn = {overview:overviewModule, track:trackModule, report:reportModule}[MODULE] || overviewModule;
+  document.getElementById('main').innerHTML = fn();
+}
+render();
+</script>
+</body>
+</html>
